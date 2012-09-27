@@ -1,0 +1,42 @@
+Trivial C11 threads.h implementation over POSIX threads.
+
+Rationale
+---------
+GNU libc hasn't implemented the thread part of the C library from the recent C11
+standard, even though recent versions of gcc do support other aspects of it,
+like atomics.
+
+If you're starting a new multithreaded project in C right now, would make sense
+to use the standard C way of using threads instead of a mismash of various
+platform-specific APIs.
+
+So until the system libc adds support for it, we need a stopgap that works
+exactly as the C standard describes.
+
+
+How to use
+----------
+No installation, no compilation, just drop c11threads.h to your project, and
+don't forget to link with -lpthread
+
+This library is extremely thin and implemented directly in the header file as a
+bunch of "static inline" functions (you do have at least C99 functionality while
+trying to use C11 threads, right?).
+
+If you'd like to use this with a C89 compiler, just search&replace or
+define-away all instances of "inline" to oblivion. Each object file will get a
+copy of all those static functions but that shouldn't be too cumbersome for a
+reasonably modern system (say anything after the 80s).
+
+License
+-------
+Author: John Tsiombikas <nuclear@member.fsf.org>
+I place this piece of code in the public domain. Feel free to use as you see
+fit. I'd appreciate it if you keep my name at the top of the code somehwere, but
+whatever.
+
+Main project site: https://github.com/jtsiomb/c11threads
+
+Feel free to send corrections, patches, trendy social pull requests,
+pictures of your cat wearing santa hats, any good porn links, or investment
+opportunities with nigerian ex-royals... it's all good.
