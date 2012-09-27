@@ -1,3 +1,17 @@
+/*
+Author: John Tsiombikas <nuclear@member.fsf.org>
+
+I place this piece of code in the public domain. Feel free to use as you see
+fit.  I'd appreciate it if you keep my name at the top of the code somehwere,
+but whatever.
+
+Main project site: https://github.com/jtsiomb/c11threads
+*/
+
+/* TODO: port to MacOSX: no timed mutexes under macosx...
+ * just delete that bit if you don't care about timed mutexes
+ */
+
 #ifndef C11THREADS_H_
 #define C11THREADS_H_
 

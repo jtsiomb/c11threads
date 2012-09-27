@@ -2,13 +2,13 @@ Trivial C11 threads.h implementation over POSIX threads.
 
 Rationale
 ---------
-GNU libc hasn't implemented the thread part of the C library from the recent C11
-standard, even though recent versions of gcc do support other aspects of it,
-like atomics.
+GNU libc doesn't implement the thread part of the C library from the recent C11
+standard, even though recent versions of gcc do support other aspects of it
+(like atomics).
 
-If you're starting a new multithreaded project in C right now, would make sense
-to use the standard C way of using threads instead of a mismash of various
-platform-specific APIs.
+If you're starting a new multithreaded project in C right now, it would make
+sense to use the standard C way of using threads instead of a mismash of
+various platform-specific APIs.
 
 So until the system libc adds support for it, we need a stopgap that works
 exactly as the C standard describes.
