@@ -40,10 +40,10 @@ typedef struct {
 } xtime;
 
 enum {
-	mtx_plain,
-	mtx_recursive,
-	mtx_timed,
-	mtx_try
+	mtx_plain		= 0,
+	mtx_recursive	= 1,
+	mtx_timed		= 2,
+	mtx_try			= 4
 };
 
 enum {
