@@ -82,7 +82,7 @@ static inline int thrd_join(thrd_t thr, int *res)
 	return thrd_success;
 }
 
-static inline int thrd_detatch(thrd_t thr)
+static inline int thrd_detach(thrd_t thr)
 {
 	return pthread_detach(thr) == 0 ? thrd_success : thrd_error;
 }
