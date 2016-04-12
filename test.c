@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "c11threads.h"
 
-void tfunc(void *arg);
+int tfunc(void *arg);
 
 int main(void)
 {
@@ -19,7 +19,7 @@ int main(void)
 	return 0;
 }
 
-void tfunc(void *arg)
+int tfunc(void *arg)
 {
 	int num = (long)arg;
 	xtime dur;
@@ -31,4 +31,5 @@ void tfunc(void *arg)
 	thrd_sleep(&dur);
 
 	printf("thread %d done\n", num);
+	return 0;
 }
