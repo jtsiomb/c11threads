@@ -30,7 +30,7 @@ typedef pthread_cond_t cnd_t;
 typedef pthread_key_t tss_t;
 typedef pthread_once_t once_flag;
 
-typedef void (*thrd_start_t)(void*);
+typedef int (*thrd_start_t)(void*);
 typedef void (*tss_dtor_t)(void*);
 
 
