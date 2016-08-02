@@ -43,11 +43,11 @@ enum {
 	mtx_plain		= 0,
 	mtx_recursive	= 1,
 	mtx_timed		= 2,
-	mtx_try			= 4
 };
 
 enum {
 	thrd_success,
+	thrd_timedout,
 	thrd_busy,
 	thrd_error,
 	thrd_nomem
@@ -125,10 +125,6 @@ static inline int mtx_init(mtx_t *mtx, int type)
 
 	pthread_mutexattr_init(&attr);
 
-	/* XXX I don't think these are exactly correct semantics */
-	if(type & mtx_try) {
-		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
-	}
 	if(type & mtx_timed) {
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_TIMED_NP);
 	}
@@ -172,8 +168,8 @@ static inline int mtx_timedlock(mtx_t *mtx, const xtime *xt)
 	ts.tv_sec = (long)xt->sec;
 	ts.tv_nsec = xt->nsec;
 
-	if((res = pthread_mutex_timedlock(mtx, &ts)) == EBUSY) {
-		return thrd_busy;
+	if((res = pthread_mutex_timedlock(mtx, &ts)) == ETIMEDOUT) {
+		return thrd_timedout;
 	}
 	return res == 0 ? thrd_success : thrd_error;
 }
@@ -219,7 +215,7 @@ static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const xtime *xt)
 	ts.tv_nsec = xt->nsec;
 
 	if((res = pthread_cond_timedwait(cond, mtx, &ts)) != 0) {
-		return res == ETIMEDOUT ? thrd_busy : thrd_error;
+		return res == ETIMEDOUT ? thrd_timedout : thrd_error;
 	}
 	return thrd_success;
 }
