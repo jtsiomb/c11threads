@@ -22,13 +22,13 @@ int main(void)
 int tfunc(void *arg)
 {
 	int num = (long)arg;
-	xtime dur;
+	struct timespec dur;
 
 	printf("hello from thread %d\n", num);
 
-	dur.sec = 4;
-	dur.nsec = 0;
-	thrd_sleep(&dur);
+	dur.tv_sec = 4;
+	dur.tv_nsec = 0;
+	thrd_sleep(&dur, 0);
 
 	printf("thread %d done\n", num);
 	return 0;

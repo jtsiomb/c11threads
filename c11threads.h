@@ -33,12 +33,6 @@ typedef pthread_once_t once_flag;
 typedef int (*thrd_start_t)(void*);
 typedef void (*tss_dtor_t)(void*);
 
-
-typedef struct {
-	time_t sec;
-	long nsec;
-} xtime;
-
 enum {
 	mtx_plain		= 0,
 	mtx_recursive	= 1,
@@ -97,18 +91,19 @@ static inline int thrd_equal(thrd_t a, thrd_t b)
 	return pthread_equal(a, b);
 }
 
-static inline void thrd_sleep(const xtime *xt)
+static inline void thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
 	int res;
-	struct timespec ts;
-	ts.tv_sec = (long)xt->sec;
-	ts.tv_nsec = xt->nsec;
+	struct timespec rem, ts = *ts_in;
 
 	do {
-		struct timespec rem;
 		res = nanosleep(&ts, &rem);
 		ts = rem;
 	} while(res == -1 && errno == EINTR);
+
+	if(rem_out) {
+		*rem_out = rem;
+	}
 }
 
 static inline void thrd_yield(void)
@@ -160,15 +155,11 @@ static inline int mtx_trylock(mtx_t *mtx)
 	return res == 0 ? thrd_success : thrd_error;
 }
 
-static inline int mtx_timedlock(mtx_t *mtx, const xtime *xt)
+static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
 	int res;
-	struct timespec ts;
 
-	ts.tv_sec = (long)xt->sec;
-	ts.tv_nsec = xt->nsec;
-
-	if((res = pthread_mutex_timedlock(mtx, &ts)) == ETIMEDOUT) {
+	if((res = pthread_mutex_timedlock(mtx, ts)) == ETIMEDOUT) {
 		return thrd_timedout;
 	}
 	return res == 0 ? thrd_success : thrd_error;
@@ -206,15 +197,11 @@ static inline int cnd_wait(cnd_t *cond, mtx_t *mtx)
 	return pthread_cond_wait(cond, mtx) == 0 ? thrd_success : thrd_error;
 }
 
-static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const xtime *xt)
+static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 {
 	int res;
-	struct timespec ts;
 
-	ts.tv_sec = (long)xt->sec;
-	ts.tv_nsec = xt->nsec;
-
-	if((res = pthread_cond_timedwait(cond, mtx, &ts)) != 0) {
+	if((res = pthread_cond_timedwait(cond, mtx, ts)) != 0) {
 		return res == ETIMEDOUT ? thrd_timedout : thrd_error;
 	}
 	return thrd_success;
@@ -249,16 +236,18 @@ static inline void call_once(once_flag *flag, void (*func)(void))
 	pthread_once(flag, func);
 }
 
+#if __STDC_VERSION__ < 201112L
 /* TODO take base into account */
-static inline int xtime_get(xtime *xt, int base)
+static inline int timespec_get(struct timespec *ts, int base)
 {
 	struct timeval tv;
 
 	gettimeofday(&tv, 0);
 
-	xt->sec = tv.tv_sec;
-	xt->nsec = tv.tv_usec * 1000;
+	ts->tv_sec = tv.tv_sec;
+	ts->tv_nsec = tv.tv_usec * 1000;
 	return base;
 }
+#endif	/* not C11 */
 
 #endif	/* C11THREADS_H_ */
