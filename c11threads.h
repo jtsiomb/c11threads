@@ -8,10 +8,6 @@ but whatever.
 Main project site: https://github.com/jtsiomb/c11threads
 */
 
-/* TODO: port to MacOSX: no timed mutexes under macosx...
- * just delete that bit if you don't care about timed mutexes
- */
-
 #ifndef C11THREADS_H_
 #define C11THREADS_H_
 
@@ -22,8 +18,13 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <sys/time.h>
 
 #define ONCE_FLAG_INIT	PTHREAD_ONCE_INIT
+#define SLEEP_NANOS 5000000	/* 5 ms */
 
 #ifdef __APPLE__
+#define _C11THREADS_NO_TIMED_MUTEX
+#endif
+
+#ifdef _C11THREADS_NO_TIMED_MUTEX
 #define PTHREAD_MUTEX_TIMED_NP PTHREAD_MUTEX_NORMAL
 #endif
 
@@ -162,17 +163,17 @@ static inline int mtx_trylock(mtx_t *mtx)
 static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
 	int res;
-#ifdef __APPLE__
+#ifdef _C11THREADS_NO_TIMED_MUTEX
 	struct timeval now;
 	struct timespec sleeptime;
 
 	sleeptime.tv_sec = 0;
-	sleeptime.tv_nsec = 5000000; // 5 ms
+	sleeptime.tv_nsec = SLEEP_NANOS;
 
 	while ((res = pthread_mutex_trylock(mtx)) == EBUSY) {
 		gettimeofday(&now, NULL);
 
-		if (now.tv_sec >= ts->tv_sec && (now.tv_usec * 1000) >= ts->tv_nsec) {
+		if (now.tv_sec > ts->tv_sec || (now.tv_sec == ts->tv_sec && (now.tv_usec * 1000) >= ts->tv_nsec)) {
 			return thrd_timedout;
 		}
 
@@ -257,7 +258,7 @@ static inline void call_once(once_flag *flag, void (*func)(void))
 	pthread_once(flag, func);
 }
 
-#if __STDC_VERSION__ < 201112L || defined (__APPLE__)
+#if __STDC_VERSION__ < 201112L || defined (_C11THREADS_NO_TIMED_MUTEX)
 /* TODO take base into account */
 static inline int timespec_get(struct timespec *ts, int base)
 {
