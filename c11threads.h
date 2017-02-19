@@ -8,10 +8,6 @@ but whatever.
 Main project site: https://github.com/jtsiomb/c11threads
 */
 
-/* TODO: port to MacOSX: no timed mutexes under macosx...
- * just delete that bit if you don't care about timed mutexes
- */
-
 #ifndef C11THREADS_H_
 #define C11THREADS_H_
 
@@ -22,6 +18,16 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <sys/time.h>
 
 #define ONCE_FLAG_INIT	PTHREAD_ONCE_INIT
+
+#ifndef PTHREAD_MUTEX_TIMED_NP
+/* detect systems which don't support timed mutexes (like macosx currently) */
+#define C11THREADS_NO_TIMED_MUTEX
+#endif
+
+#ifdef C11THREADS_NO_TIMED_MUTEX
+#define PTHREAD_MUTEX_TIMED_NP PTHREAD_MUTEX_NORMAL
+#define C11THREADS_TIMEDLOCK_POLL_INTERVAL 5000000	/* 5 ms */
+#endif
 
 /* types */
 typedef pthread_t thrd_t;
@@ -158,10 +164,29 @@ static inline int mtx_trylock(mtx_t *mtx)
 static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
 	int res;
+#ifdef C11THREADS_NO_TIMED_MUTEX
+	/* fake a timedlock by polling trylock in a loop and waiting for a bit */
+	struct timeval now;
+	struct timespec sleeptime;
 
+	sleeptime.tv_sec = 0;
+	sleeptime.tv_nsec = C11THREADS_TIMEDLOCK_POLL_INTERVAL;
+
+	while((res = pthread_mutex_trylock(mtx)) == EBUSY) {
+		gettimeofday(&now, NULL);
+
+		if(now.tv_sec > ts->tv_sec || (now.tv_sec == ts->tv_sec &&
+					(now.tv_usec * 1000) >= ts->tv_nsec)) {
+			return thrd_timedout;
+		}
+
+		nanosleep(&sleeptime, NULL);
+	}
+#else
 	if((res = pthread_mutex_timedlock(mtx, ts)) == ETIMEDOUT) {
 		return thrd_timedout;
 	}
+#endif
 	return res == 0 ? thrd_success : thrd_error;
 }
 
@@ -236,7 +261,7 @@ static inline void call_once(once_flag *flag, void (*func)(void))
 	pthread_once(flag, func);
 }
 
-#if __STDC_VERSION__ < 201112L
+#if __STDC_VERSION__ < 201112L || defined(C11THREADS_NO_TIMED_MUTEX)
 /* TODO take base into account */
 static inline int timespec_get(struct timespec *ts, int base)
 {

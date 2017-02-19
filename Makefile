@@ -1,7 +1,7 @@
 obj = test.o
 bin = test
 
-CFLAGS = -pedantic -Wall -g
+CFLAGS = -std=gnu99 -pedantic -Wall -g
 LDFLAGS = -lpthread
 
 $(bin): $(obj)
