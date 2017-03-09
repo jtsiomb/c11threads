@@ -19,8 +19,8 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 #define ONCE_FLAG_INIT	PTHREAD_ONCE_INIT
 
-#ifndef PTHREAD_MUTEX_TIMED_NP
-/* detect systems which don't support timed mutexes (like macosx currently) */
+#ifdef __APPLE__
+/* Darwin doesn't implement timed mutexes currently */
 #define C11THREADS_NO_TIMED_MUTEX
 #endif
 
