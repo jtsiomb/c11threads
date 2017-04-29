@@ -58,10 +58,11 @@ enum {
 
 static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {
-	/* XXX there's a third possible value returned according to the standard:
-	 * thrd_nomem. but it doesn't seem to correspond to any pthread_create errors.
-	 */
-	return pthread_create(thr, 0, (void*(*)(void*))func, arg) == 0 ? thrd_success : thrd_error;
+	int res = pthread_create(thr, 0, (void*(*)(void*))func, arg);
+	if(res == 0) {
+		return thrd_success;
+	}
+	return res == ENOMEM ? thrd_nomem : thrd_error;
 }
 
 static inline void thrd_exit(int res)
