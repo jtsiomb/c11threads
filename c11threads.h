@@ -59,10 +59,10 @@ enum {
 static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {
 	int res = pthread_create(thr, 0, (void*(*)(void*))func, arg);
-	if (res == ENOMEM) {
-		return thrd_nomem;
+	if(res == 0) {
+		return thrd_success;
 	}
-	return res == 0 ? thrd_success : thrd_error;
+	return res == ENOMEM ? thrd_nomem : thrd_error;
 }
 
 static inline void thrd_exit(int res)
