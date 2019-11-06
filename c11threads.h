@@ -98,19 +98,13 @@ static inline int thrd_equal(thrd_t a, thrd_t b)
 	return pthread_equal(a, b);
 }
 
-static inline void thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
+static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
-	int res;
-	struct timespec rem, ts = *ts_in;
-
-	do {
-		res = nanosleep(&ts, &rem);
-		ts = rem;
-	} while(res == -1 && errno == EINTR);
-
-	if(rem_out) {
-		*rem_out = rem;
+	if(nanosleep(ts_in, rem_out) < 0) {
+		if(errno == EINTR) return -1;
+		return -2;
 	}
+	return 0;
 }
 
 static inline void thrd_yield(void)
