@@ -78,7 +78,7 @@ static inline int thrd_join(thrd_t thr, int *res)
 		return thrd_error;
 	}
 	if(res) {
-		*res = (long)retval;
+		*res = (int)(long)retval;
 	}
 	return thrd_success;
 }
