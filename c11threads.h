@@ -17,7 +17,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <sched.h>	/* for sched_yield */
 #include <sys/time.h>
 
-#define thread_local    _Thread_local
+#define thread_local	_Thread_local
 #define ONCE_FLAG_INIT	PTHREAD_ONCE_INIT
 
 #ifdef __APPLE__
