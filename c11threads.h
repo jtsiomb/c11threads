@@ -23,10 +23,21 @@ Main project site: https://github.com/jtsiomb/c11threads
 #ifdef __APPLE__
 /* Darwin doesn't implement timed mutexes currently */
 #define C11THREADS_NO_TIMED_MUTEX
+#include <Availability.h>
+#ifndef __MAC_10_15
+#define C11THREADS_NO_TIMESPEC_GET
+#endif
+#else
+#if __STDC_VERSION__ < 201112L
+#define C11THREADS_NO_TIMESPEC_GET
+#endif
+#endif
+
+#ifndef PTHREAD_MUTEX_TIMED_NP
+#define PTHREAD_MUTEX_TIMED_NP PTHREAD_MUTEX_NORMAL
 #endif
 
 #ifdef C11THREADS_NO_TIMED_MUTEX
-#define PTHREAD_MUTEX_TIMED_NP PTHREAD_MUTEX_NORMAL
 #define C11THREADS_TIMEDLOCK_POLL_INTERVAL 5000000	/* 5 ms */
 #endif
 
@@ -159,14 +170,15 @@ static inline int mtx_trylock(mtx_t *mtx)
 
 static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
-	int res;
+	int res = 0;
 #ifdef C11THREADS_NO_TIMED_MUTEX
 	/* fake a timedlock by polling trylock in a loop and waiting for a bit */
-	struct timeval now;
-	struct timespec sleeptime;
+	struct timeval now = {0};
+	struct timespec sleeptime = {0};
 
 	sleeptime.tv_sec = 0;
 	sleeptime.tv_nsec = C11THREADS_TIMEDLOCK_POLL_INTERVAL;
+	nanosleep(&sleeptime, NULL);
 
 	while((res = pthread_mutex_trylock(mtx)) == EBUSY) {
 		gettimeofday(&now, NULL);
@@ -257,7 +269,7 @@ static inline void call_once(once_flag *flag, void (*func)(void))
 	pthread_once(flag, func);
 }
 
-#if __STDC_VERSION__ < 201112L || defined(C11THREADS_NO_TIMED_MUTEX)
+#if defined(C11THREADS_NO_TIMESPEC_GET)
 /* TODO take base into account */
 static inline int timespec_get(struct timespec *ts, int base)
 {
@@ -269,6 +281,6 @@ static inline int timespec_get(struct timespec *ts, int base)
 	ts->tv_nsec = tv.tv_usec * 1000;
 	return base;
 }
-#endif	/* not C11 */
+#endif
 
 #endif	/* C11THREADS_H_ */
