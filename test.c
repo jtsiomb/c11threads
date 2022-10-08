@@ -66,7 +66,7 @@ void run_timed_test()
 	struct timespec dur;
 
 	mtx_init(&mtx, mtx_timed);
-	mtx_init(&mtx, mtx_plain);
+	mtx_init(&startup_mtx, mtx_plain);
 
 	mtx_lock(&startup_mtx);
 	thrd_create(&thread, hold_mutex_three_seconds, &mtx);
