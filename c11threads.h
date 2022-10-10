@@ -27,14 +27,8 @@ Main project site: https://github.com/jtsiomb/c11threads
 #ifndef __MAC_10_15
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
-#else
-#if __STDC_VERSION__ < 201112L
+#elif __STDC_VERSION__ < 201112L
 #define C11THREADS_NO_TIMESPEC_GET
-#endif
-#endif
-
-#ifndef PTHREAD_MUTEX_TIMED_NP
-#define PTHREAD_MUTEX_TIMED_NP PTHREAD_MUTEX_NORMAL
 #endif
 
 #ifdef C11THREADS_NO_TIMED_MUTEX
@@ -133,9 +127,11 @@ static inline int mtx_init(mtx_t *mtx, int type)
 
 	pthread_mutexattr_init(&attr);
 
+#ifndef PTHREAD_MUTEX_TIMED_NP
 	if(type & mtx_timed) {
-		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_TIMED_NP);
+		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
 	}
+#endif
 	if(type & mtx_recursive) {
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 	}
@@ -173,12 +169,11 @@ static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 	int res = 0;
 #ifdef C11THREADS_NO_TIMED_MUTEX
 	/* fake a timedlock by polling trylock in a loop and waiting for a bit */
-	struct timeval now = {0};
-	struct timespec sleeptime = {0};
+	struct timeval now;
+	struct timespec sleeptime;
 
 	sleeptime.tv_sec = 0;
 	sleeptime.tv_nsec = C11THREADS_TIMEDLOCK_POLL_INTERVAL;
-	nanosleep(&sleeptime, NULL);
 
 	while((res = pthread_mutex_trylock(mtx)) == EBUSY) {
 		gettimeofday(&now, NULL);
