@@ -11,6 +11,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 #ifndef C11THREADS_H_
 #define C11THREADS_H_
 
+#include <stdint.h>
 #include <time.h>
 #include <errno.h>
 #include <pthread.h>
@@ -68,7 +69,7 @@ static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 
 static inline void thrd_exit(int res)
 {
-	pthread_exit((void*)(long)res);
+	pthread_exit((void*)(intptr_t)res);
 }
 
 static inline int thrd_join(thrd_t thr, int *res)
@@ -79,7 +80,7 @@ static inline int thrd_join(thrd_t thr, int *res)
 		return thrd_error;
 	}
 	if(res) {
-		*res = (int)(long)retval;
+		*res = (int)(intptr_t)retval;
 	}
 	return thrd_success;
 }
