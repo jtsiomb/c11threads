@@ -127,11 +127,13 @@ static inline int mtx_init(mtx_t *mtx, int type)
 
 	pthread_mutexattr_init(&attr);
 
-#ifndef PTHREAD_MUTEX_TIMED_NP
 	if(type & mtx_timed) {
+#ifdef PTHREAD_MUTEX_TIMED_NP
+		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_TIMED_NP);
+#else
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
-	}
 #endif
+	}
 	if(type & mtx_recursive) {
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 	}
