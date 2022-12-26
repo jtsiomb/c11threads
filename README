@@ -4,20 +4,23 @@ Rationale
 ---------
 GNU libc doesn't implement the thread part of the C library from the recent C11
 standard, even though recent versions of gcc do support other aspects of it
-(like atomics).
+(like atomics). Likewise, Microsoft's STL also doesn't implement C11 threading.
 
 If you're starting a new multithreaded project in C right now, it would make
-sense to use the standard C way of using threads instead of a mismash of
+sense to use the standard C way of using threads instead of a mishmash of
 various platform-specific APIs.
 
 So until the system libc adds support for it, we need a stopgap that works
 exactly as the C standard describes.
 
-
 How to use
 ----------
-No installation, no compilation, just drop c11threads.h to your project, and
-don't forget to link with -lpthread
+No installation, no compilation, just drop c11threads.h into your project, and
+don't forget to link with "-lpthread".
+
+Note for Windows users: One of your source files needs to define
+"C11THREADS_DEFINE_GLOBALS" before including the header. On other platforms,
+this will do nothing.
 
 This library is extremely thin and implemented directly in the header file as a
 bunch of "static inline" functions (you do have at least C99 functionality while
@@ -30,7 +33,9 @@ reasonably modern system (say anything after the 80s).
 
 License
 -------
-Author: John Tsiombikas <nuclear@member.fsf.org>
+Authors: John Tsiombikas <nuclear@member.fsf.org>
+         Oliver Old <oliver.old@outlook.com>
+
 I place this piece of code in the public domain. Feel free to use as you see
 fit. I'd appreciate it if you keep my name at the top of the code somehwere, but
 whatever.
@@ -39,4 +44,4 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 Feel free to send corrections, patches, trendy social pull requests,
 pictures of your cat wearing santa hats, any good porn links, or investment
-opportunities with nigerian ex-royals... it's all good.
+opportunities with Nigerian ex-royals... It's all good.
