@@ -1,10 +1,2 @@
-﻿# Visual Studio files
-/.vs
-/Debug
-/Release
-/x64
-/*.vcxproj.user
-
-# Make build output
-/test.o
+﻿/test.o
 /test

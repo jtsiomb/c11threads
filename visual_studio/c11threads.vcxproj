@@ -114,10 +114,10 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="test.c" />
+    <ClCompile Include="..\test.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="c11threads.h" />
+    <ClInclude Include="..\c11threads.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
