@@ -123,17 +123,17 @@ enum {
 	thrd_nomem
 };
 
-/* Global data functions. */
+/* Library functions. */
 
-/* Win32: Initialize global data structures. */
-static inline void thrd_init(void);
-/* Win32: Destroy global data structures. */
-static inline void thrd_destroy(void);
+/* Win32: Initialize library. */
+static inline void c11threads_init(void);
+/* Win32: Destroy library. */
+static inline void c11threads_destroy(void);
 
 /* Thread functions. */
 
 /* Win32: Register foreign thread in c11threads to allow for proper thrd_join(). Memory leak if neither joined nor detached. */
-static inline int thrd_self_register(void);
+static inline int c11threads_thrd_self_register(void);
 static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
 /* Win32: Threads not created with thrd_create() need to call this to clean up TSS. */
 static inline void thrd_exit(int res);
@@ -188,10 +188,10 @@ static inline int timespec_get(struct timespec *ts, int base);
 /* ---- platform ---- */
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-void _thrd_init_win32(void);
-void _thrd_destroy_win32(void);
+void _c11threads_init_win32(void);
+void _c11threads_destroy_win32(void);
 
-int _thrd_self_register_win32(void);
+int _c11threads_thrd_self_register_win32(void);
 int _thrd_create_win32(thrd_t *thr, thrd_start_t func, void *arg);
 void _thrd_exit_win32(int res);
 int _thrd_join_win32(thrd_t thr, int *res);
@@ -229,28 +229,28 @@ int _timespec_get_win32(struct timespec *ts, int base);
 #endif
 #endif
 
-/* ---- globals ---- */
+/* ---- library ---- */
 
-static inline void thrd_init(void)
+static inline void c11threads_init(void)
 {
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_thrd_init_win32();
+	_c11threads_init_win32();
 #endif
 }
 
-static inline void thrd_destroy(void)
+static inline void c11threads_destroy(void)
 {
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_thrd_destroy_win32();
+	_c11threads_destroy_win32();
 #endif
 }
 
 /* ---- thread management ---- */
 
-static inline int thrd_self_register(void)
+static inline int c11threads_thrd_self_register(void)
 {
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _thrd_self_register_win32();
+	return _c11threads_thrd_self_register_win32();
 #else
 	return thrd_success;
 #endif

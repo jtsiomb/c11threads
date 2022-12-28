@@ -39,76 +39,63 @@ Main project site: https://github.com/jtsiomb/c11threads
 #endif
 
 
-/* ---- globals ---- */
+/* ---- library ---- */
 
-struct _thrd_entry_win32_t {
+struct _c11threads_thrd_entry_win32_t {
 	thrd_t thrd;
 	HANDLE h;
-	struct _thrd_entry_win32_t *next;
+	struct _c11threads_thrd_entry_win32_t *next;
 };
 
-struct _tss_dtor_entry_win32_t {
+struct _c11threads_tss_dtor_entry_win32_t {
 	tss_t key;
 	tss_dtor_t dtor;
-	struct _tss_dtor_entry_win32_t *next;
+	struct _c11threads_tss_dtor_entry_win32_t *next;
 };
 
-_Bool _thrd_globals_initialized_win32 = 0;
-LARGE_INTEGER _thrd_perf_freq_win32;
-CRITICAL_SECTION _thrd_list_critical_section_win32;
-struct _thrd_entry_win32_t *_thrd_list_win32 = NULL;
-CRITICAL_SECTION _tss_dtor_list_critical_section_win32;
-struct _tss_dtor_entry_win32_t *_tss_dtor_list_win32 = NULL;
+static _Bool _c11threads_initialized_win32 = 0;
+static LARGE_INTEGER _c11threads_perf_freq_win32;
+static CRITICAL_SECTION _c11threads_thrd_list_critical_section_win32;
+static struct _c11threads_thrd_entry_win32_t *_c11threads_thrd_list_win32 = NULL;
+static CRITICAL_SECTION _c11threads_tss_dtor_list_critical_section_win32;
+static struct _c11threads_tss_dtor_entry_win32_t *_c11threads_tss_dtor_list_win32 = NULL;
 
-static int __stdcall _thrd_init_globals_callback_win32(INIT_ONCE *init_once, void *parameter, void **context)
+static void _c11threads_assert_initialized_win32(void)
 {
-	(void)init_once;
-	(void)parameter;
-	(void)context;
-	QueryPerformanceFrequency(&_thrd_perf_freq_win32);
-#pragma warning(suppress: 28125)
-	InitializeCriticalSection(&_thrd_list_critical_section_win32);
-#pragma warning(suppress: 28125)
-	InitializeCriticalSection(&_tss_dtor_list_critical_section_win32);
-	return 1;
+	assert(_c11threads_initialized_win32);
 }
 
-static void _thrd_assert_globals_initialized_win32(void)
+void _c11threads_init_win32(void)
 {
-	assert(_thrd_globals_initialized_win32);
+	QueryPerformanceFrequency(&_c11threads_perf_freq_win32);
+#pragma warning(suppress: 28125)
+	InitializeCriticalSection(&_c11threads_thrd_list_critical_section_win32);
+#pragma warning(suppress: 28125)
+	InitializeCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
+	_c11threads_initialized_win32 = 1;
 }
 
-void _thrd_init_win32(void)
+void _c11threads_destroy_win32(void)
 {
-	QueryPerformanceFrequency(&_thrd_perf_freq_win32);
-#pragma warning(suppress: 28125)
-	InitializeCriticalSection(&_thrd_list_critical_section_win32);
-#pragma warning(suppress: 28125)
-	InitializeCriticalSection(&_tss_dtor_list_critical_section_win32);
-	_thrd_globals_initialized_win32 = 1;
-}
-
-void _thrd_destroy_win32(void)
-{
-	_thrd_assert_globals_initialized_win32();
-	if (_thrd_globals_initialized_win32) {
-		_thrd_globals_initialized_win32 = 0;
-		assert(!_tss_dtor_list_win32);
-		assert(!_thrd_list_win32);
-		DeleteCriticalSection(&_tss_dtor_list_critical_section_win32);
-		DeleteCriticalSection(&_thrd_list_critical_section_win32);
+	_c11threads_assert_initialized_win32();
+	if (_c11threads_initialized_win32) {
+		_c11threads_initialized_win32 = 0;
+		assert(!_c11threads_tss_dtor_list_win32);
+		assert(!_c11threads_thrd_list_win32);
+		DeleteCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
+		DeleteCriticalSection(&_c11threads_thrd_list_critical_section_win32);
 	}
 }
 
 /* ---- utilities ---- */
 
-static _Bool _thrd_util_is_timespec_valid_win32(const struct timespec *ts)
+static _Bool _c11threads_util_is_timespec_valid_win32(const struct timespec *ts)
 {
 	return ts->tv_sec >= 0 && ts->tv_nsec >= 0 && ts->tv_nsec <= 999999999;
 }
 
 /* Precondition: 'ts' validated. */
-static long long _thrd_util_timespec_to_file_time_win32(
+static long long _c11threads_util_timespec_to_file_time_win32(
 	const struct timespec *ts,
 #ifndef _USE_32BIT_TIME_T
 	size_t *periods
@@ -152,7 +139,7 @@ static long long _thrd_util_timespec_to_file_time_win32(
 }
 
 /* Precondition: 'ts' validated. */
-static _Bool _thrd_util_timespec_to_milliseconds_win32(const struct timespec *ts, unsigned long *ms)
+static _Bool _c11threads_util_timespec_to_milliseconds_win32(const struct timespec *ts, unsigned long *ms)
 {
 	unsigned long sec_res;
 	unsigned long nsec_res;
@@ -181,7 +168,7 @@ static _Bool _thrd_util_timespec_to_milliseconds_win32(const struct timespec *ts
 }
 
 /* Precondition: 'file_time' accumulated with 'periods' does not overflow. */
-static void _thrd_util_file_time_to_timespec_win32(
+static void _c11threads_util_file_time_to_timespec_win32(
 	unsigned long long file_time,
 #ifndef _USE_32BIT_TIME_T
 	unsigned long long periods,
@@ -201,12 +188,12 @@ static void _thrd_util_file_time_to_timespec_win32(
 static _Bool _thrd_register_win32(thrd_t thrd, HANDLE h)
 {
 	_Bool res;
-	struct _thrd_entry_win32_t **curr;
+	struct _c11threads_thrd_entry_win32_t **curr;
 
 	res = 0;
-	_thrd_assert_globals_initialized_win32();
-	EnterCriticalSection(&_thrd_list_critical_section_win32);
-	curr = &_thrd_list_win32;
+	_c11threads_assert_initialized_win32();
+	EnterCriticalSection(&_c11threads_thrd_list_critical_section_win32);
+	curr = &_c11threads_thrd_list_win32;
 	while (*curr) {
 		curr = &(*curr)->next;
 	}
@@ -217,27 +204,27 @@ static _Bool _thrd_register_win32(thrd_t thrd, HANDLE h)
 		(*curr)->next = NULL;
 		res = 1;
 	}
-	LeaveCriticalSection(&_thrd_list_critical_section_win32);
+	LeaveCriticalSection(&_c11threads_thrd_list_critical_section_win32);
 	return res;
 }
 
 static _Bool _thrd_deregister_win32(thrd_t thrd)
 {
 	_Bool res;
-	struct _thrd_entry_win32_t *prev;
-	struct _thrd_entry_win32_t *curr;
+	struct _c11threads_thrd_entry_win32_t *prev;
+	struct _c11threads_thrd_entry_win32_t *curr;
 
 	res = 0;
-	_thrd_assert_globals_initialized_win32();
-	EnterCriticalSection(&_thrd_list_critical_section_win32);
+	_c11threads_assert_initialized_win32();
+	EnterCriticalSection(&_c11threads_thrd_list_critical_section_win32);
 	prev = NULL;
-	curr = _thrd_list_win32;
+	curr = _c11threads_thrd_list_win32;
 	while (curr) {
 		if (curr->thrd == thrd) {
 			if (prev) {
 				prev->next = curr->next;
 			} else {
-				_thrd_list_win32 = curr->next;
+				_c11threads_thrd_list_win32 = curr->next;
 			}
 			CloseHandle(curr->h);
 			free(curr);
@@ -247,7 +234,7 @@ static _Bool _thrd_deregister_win32(thrd_t thrd)
 		prev = curr;
 		curr = curr->next;
 	}
-	LeaveCriticalSection(&_thrd_list_critical_section_win32);
+	LeaveCriticalSection(&_c11threads_thrd_list_critical_section_win32);
 	return res;
 }
 
@@ -255,18 +242,18 @@ static void _thrd_run_tss_dtors_win32(void)
 {
 	_Bool ran_dtor;
 	size_t i;
-	struct _tss_dtor_entry_win32_t *prev;
-	struct _tss_dtor_entry_win32_t *curr;
-	struct _tss_dtor_entry_win32_t *temp;
+	struct _c11threads_tss_dtor_entry_win32_t *prev;
+	struct _c11threads_tss_dtor_entry_win32_t *curr;
+	struct _c11threads_tss_dtor_entry_win32_t *temp;
 	void *val;
 
-	_thrd_assert_globals_initialized_win32();
-	EnterCriticalSection(&_tss_dtor_list_critical_section_win32);
+	_c11threads_assert_initialized_win32();
+	EnterCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 	ran_dtor = 1;
 	for (i = 0; i < TSS_DTOR_ITERATIONS && ran_dtor; ++i) {
 		ran_dtor = 0;
 		prev = NULL;
-		curr = _tss_dtor_list_win32;
+		curr = _c11threads_tss_dtor_list_win32;
 		while (curr) {
 			val = TlsGetValue(curr->key);
 			if (val) {
@@ -281,8 +268,8 @@ static void _thrd_run_tss_dtors_win32(void)
 					prev->next = curr;
 				} else if (!curr) {
 					/* List empty. */
-					_tss_dtor_list_win32 = NULL;
-					LeaveCriticalSection(&_tss_dtor_list_critical_section_win32);
+					_c11threads_tss_dtor_list_win32 = NULL;
+					LeaveCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 					return;
 				}
 				continue;
@@ -291,7 +278,7 @@ static void _thrd_run_tss_dtors_win32(void)
 			curr = curr->next;
 		}
 	}
-	LeaveCriticalSection(&_tss_dtor_list_critical_section_win32);
+	LeaveCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 }
 
 static int _thrd_sleep_internal_win32(long long file_time_in, long long *file_time_out)
@@ -304,7 +291,7 @@ static int _thrd_sleep_internal_win32(long long file_time_in, long long *file_ti
 	LARGE_INTEGER time_end;
 	unsigned long long time_result;
 
-	_thrd_assert_globals_initialized_win32();
+	_c11threads_assert_initialized_win32();
 
 	timer = CreateWaitableTimerW(NULL, 1, NULL);
 	if (!timer) {
@@ -343,7 +330,7 @@ static int _thrd_sleep_internal_win32(long long file_time_in, long long *file_ti
 
 			/* Would overflow. */
 			if (time_result > (unsigned long long)-1 / 10000000ULL) {
-				time_result /= (unsigned long long)_thrd_perf_freq_win32.QuadPart; /* Try dividing first. */
+				time_result /= (unsigned long long)_c11threads_perf_freq_win32.QuadPart; /* Try dividing first. */
 
 				/* Inaccurate version would still overflow. */
 				if (time_result > (unsigned long long)-1 / 10000000ULL) {
@@ -352,7 +339,7 @@ static int _thrd_sleep_internal_win32(long long file_time_in, long long *file_ti
 					*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL; /* Return inaccurate result. */
 				}
 			} else {
-				*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL / (unsigned long long)_thrd_perf_freq_win32.QuadPart;
+				*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL / (unsigned long long)_c11threads_perf_freq_win32.QuadPart;
 			}
 
 			if (*file_time_out < 0) {
@@ -378,7 +365,7 @@ static int _thrd_sleep_internal_win32(long long file_time_in, long long *file_ti
 	return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
 }
 
-int _thrd_self_register_win32(void)
+int _c11threads_thrd_self_register_win32(void)
 {
 	void *process;
 	void *thread;
@@ -498,11 +485,11 @@ int _thrd_sleep_win32(const struct timespec *ts_in, struct timespec *rem_out)
 	size_t periods;
 #endif
 
-	if (!_thrd_util_is_timespec_valid_win32(ts_in)) {
+	if (!_c11threads_util_is_timespec_valid_win32(ts_in)) {
 		return -ERROR_INVALID_PARAMETER;
 	}
 
-	file_time = _thrd_util_timespec_to_file_time_win32(
+	file_time = _c11threads_util_timespec_to_file_time_win32(
 		ts_in,
 #ifndef _USE_32BIT_TIME_T
 		&periods
@@ -519,7 +506,7 @@ restart_sleep:
 	res = _thrd_sleep_internal_win32(file_time, rem_out ? &file_time : NULL);
 
 	if (res == -1 && rem_out) {
-		_thrd_util_file_time_to_timespec_win32(
+		_c11threads_util_file_time_to_timespec_win32(
 			file_time,
 #ifndef _USE_32BIT_TIME_T
 			periods,
@@ -577,7 +564,7 @@ int _mtx_timedlock_win32(mtx_t *mtx, const struct timespec *ts)
 	long long sleep_time;
 	int sleep_res;
 
-	if (!_thrd_util_is_timespec_valid_win32(ts)) {
+	if (!_c11threads_util_is_timespec_valid_win32(ts)) {
 		return thrd_error;
 	}
 
@@ -642,7 +629,7 @@ int _cnd_timedwait_win32(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 	unsigned long wait_time;
 	_Bool clamped;
 
-	if (!_thrd_util_is_timespec_valid_win32(ts)) {
+	if (!_c11threads_util_is_timespec_valid_win32(ts)) {
 		return thrd_error;
 	}
 
@@ -661,7 +648,7 @@ int _cnd_timedwait_win32(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 			end_time.tv_nsec += 1000000000;
 		}
 
-		if (!_thrd_util_timespec_to_milliseconds_win32(&end_time, &wait_time)) {
+		if (!_c11threads_util_timespec_to_milliseconds_win32(&end_time, &wait_time)) {
 			/* Clamp wait_time. Pretend we've had a spurious wakeup if expired. */
 			wait_time = INFINITE - 1;
 			clamped = 1;
@@ -685,12 +672,12 @@ int _cnd_timedwait_win32(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 
 static int _tss_register_win32(tss_t key, tss_dtor_t dtor) {
 	int res;
-	struct _tss_dtor_entry_win32_t **curr;
+	struct _c11threads_tss_dtor_entry_win32_t **curr;
 
 	res = 0;
-	_thrd_assert_globals_initialized_win32();
-	EnterCriticalSection(&_tss_dtor_list_critical_section_win32);
-	curr = &_tss_dtor_list_win32;
+	_c11threads_assert_initialized_win32();
+	EnterCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
+	curr = &_c11threads_tss_dtor_list_win32;
 	while (*curr) {
 		curr = &(*curr)->next;
 	}
@@ -701,24 +688,24 @@ static int _tss_register_win32(tss_t key, tss_dtor_t dtor) {
 		(*curr)->next = NULL;
 		res = 1;
 	}
-	LeaveCriticalSection(&_tss_dtor_list_critical_section_win32);
+	LeaveCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 	return res;
 }
 
 static void _tss_deregister_win32(tss_t key) {
-	struct _tss_dtor_entry_win32_t *prev;
-	struct _tss_dtor_entry_win32_t *curr;
+	struct _c11threads_tss_dtor_entry_win32_t *prev;
+	struct _c11threads_tss_dtor_entry_win32_t *curr;
 
-	_thrd_assert_globals_initialized_win32();
-	EnterCriticalSection(&_tss_dtor_list_critical_section_win32);
+	_c11threads_assert_initialized_win32();
+	EnterCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 	prev = NULL;
-	curr = _tss_dtor_list_win32;
+	curr = _c11threads_tss_dtor_list_win32;
 	while (curr) {
 		if (curr->key == key) {
 			if (prev) {
 				prev->next = curr->next;
 			} else {
-				_tss_dtor_list_win32 = curr->next;
+				_c11threads_tss_dtor_list_win32 = curr->next;
 			}
 			free(curr);
 			break;
@@ -726,7 +713,7 @@ static void _tss_deregister_win32(tss_t key) {
 		prev = curr;
 		curr = curr->next;
 	}
-	LeaveCriticalSection(&_tss_dtor_list_critical_section_win32);
+	LeaveCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 }
 
 int _tss_create_win32(tss_t *key, tss_dtor_t dtor)

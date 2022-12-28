@@ -33,7 +33,7 @@ void run_call_once_test(void);
 
 int main(void)
 {
-	thrd_init();
+	c11threads_init();
 
 	puts("start thread test");
 	run_thread_test();
@@ -59,7 +59,7 @@ int main(void)
 	puts("skip call once test on win32 < vista\n");
 #endif
 
-	thrd_destroy();
+	c11threads_destroy();
 
 #ifdef _WIN32
 	if (_CrtDumpMemoryLeaks()) {
