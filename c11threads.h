@@ -75,6 +75,10 @@ Main project site: https://github.com/jtsiomb/c11threads
 #define C11THREADS_TIMEDLOCK_POLL_INTERVAL	5000000	/* 5 ms */
 #define C11THREADS_CALLONCE_POLL_INTERVAL	5000000	/* 5 ms */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* types */
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 typedef unsigned long thrd_t;
@@ -659,5 +663,9 @@ static inline int timespec_get(struct timespec *ts, int base)
 #endif
 
 #endif  /* !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif	/* C11THREADS_H_ */
