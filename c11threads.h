@@ -93,6 +93,14 @@ typedef unsigned long tss_t;
 typedef struct {
 	void *ptr;
 } once_flag;
+struct _c11threads_timespec32_win32_t {
+	long tv_sec;
+	long tv_nsec;
+};
+struct _c11threads_timespec64_win32_t {
+	long long tv_sec;
+	long tv_nsec;
+};
 #else
 typedef pthread_t thrd_t;
 typedef pthread_mutex_t mtx_t;
@@ -251,11 +259,19 @@ static inline int thrd_equal(thrd_t a, thrd_t b)
 	return a == b;
 }
 
-int _thrd_sleep_win32(const struct timespec *ts_in, struct timespec *rem_out);
+#ifdef _USE_32BIT_TIME_T
+int _thrd_sleep32_win32(const struct _c11threads_timespec32_win32_t *ts_in, struct _c11threads_timespec32_win32_t *rem_out);
 static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
-	return _thrd_sleep_win32(ts_in, rem_out);
+	return _thrd_sleep32_win32((const struct _c11threads_timespec32_win32_t*)ts_in, (struct _c11threads_timespec32_win32_t*)rem_out);
 }
+#else
+int _thrd_sleep64_win32(const struct _c11threads_timespec64_win32_t *ts_in, struct _c11threads_timespec64_win32_t *rem_out);
+static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
+{
+	return _thrd_sleep64_win32((const struct _c11threads_timespec64_win32_t*)ts_in, (struct _c11threads_timespec64_win32_t*)rem_out);
+}
+#endif
 
 void _thrd_yield_win32(void);
 static inline void thrd_yield(void)
@@ -289,11 +305,19 @@ static inline int mtx_trylock(mtx_t *mtx)
 	return _mtx_trylock_win32(mtx);
 }
 
-int _mtx_timedlock_win32(mtx_t *mtx, const struct timespec *ts);
+#ifdef _USE_32BIT_TIME_T
+int _mtx_timedlock32_win32(mtx_t *mtx, const struct _c11threads_timespec32_win32_t *ts);
 static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
-	return _mtx_timedlock_win32(mtx, ts);
+	return _mtx_timedlock32_win32(mtx, (const struct _c11threads_timespec32_win32_t*)ts);
 }
+#else
+int _mtx_timedlock64_win32(mtx_t *mtx, const struct _c11threads_timespec64_win32_t *ts);
+static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
+{
+	return _mtx_timedlock64_win32(mtx, (const struct _c11threads_timespec64_win32_t*)ts);
+}
+#endif
 
 int _mtx_unlock_win32(mtx_t *mtx);
 static inline int mtx_unlock(mtx_t *mtx)
@@ -333,11 +357,19 @@ static inline int cnd_wait(cnd_t *cond, mtx_t *mtx)
 	return _cnd_wait_win32(cond, mtx);
 }
 
-int _cnd_timedwait_win32(cnd_t *cond, mtx_t *mtx, const struct timespec *ts);
+#ifdef _USE_32BIT_TIME_T
+int _cnd_timedwait32_win32(cnd_t *cond, mtx_t *mtx, const struct _c11threads_timespec32_win32_t *ts);
 static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 {
-	return _cnd_timedwait_win32(cond, mtx, ts);
+	return _cnd_timedwait32_win32(cond, mtx, (const struct _c11threads_timespec32_win32_t*)ts);
 }
+#else
+int _cnd_timedwait64_win32(cnd_t *cond, mtx_t *mtx, const struct _c11threads_timespec64_win32_t *ts);
+static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
+{
+	return _cnd_timedwait64_win32(cond, mtx, (const struct _c11threads_timespec64_win32_t*)ts);
+}
+#endif
 #endif
 
 /* ---- thread-specific data ---- */
@@ -383,11 +415,19 @@ static inline void call_once(once_flag *flag, void (*func)(void))
 #endif
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
-int _timespec_get_win32(struct timespec *ts, int base);
+#ifdef _USE_32BIT_TIME_T
+int _c11threads_timespec32_get_win32(struct _c11threads_timespec32_win32_t *ts, int base);
 static inline int timespec_get(struct timespec *ts, int base)
 {
-	return _timespec_get_win32(ts, base);
+	return _c11threads_timespec32_get_win32((struct _c11threads_timespec32_win32_t*)ts, base);
 }
+#else
+int _c11threads_timespec64_get_win32(struct _c11threads_timespec64_win32_t *ts, int base);
+static inline int timespec_get(struct timespec *ts, int base)
+{
+	return _c11threads_timespec64_get_win32((struct _c11threads_timespec64_win32_t*)ts, base);
+}
+#endif
 #endif
 
 #else /* !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) */
