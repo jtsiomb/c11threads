@@ -22,7 +22,6 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include "c11threads.h"
 
 #include <assert.h>
-#include <limits.h>
 #include <malloc.h>
 #include <memory.h>
 #include <stddef.h>
@@ -120,16 +119,16 @@ static long long _thrd_util_timespec_to_file_time_win32(
 	unsigned long long nsec_res;
 
 #ifdef _USE_32BIT_TIME_T
-	sec_res = (unsigned long long)ts->tv_sec * 10000000;
+	sec_res = (unsigned long long)ts->tv_sec * 10000000ULL;
 #else
 	unsigned long long res;
 
-	*periods = (unsigned long)((unsigned long long)ts->tv_sec / 922337203685);
-	sec_res = ((unsigned long long)ts->tv_sec % 922337203685) * 10000000;
+	*periods = (unsigned long)((unsigned long long)ts->tv_sec / 922337203685ULL);
+	sec_res = ((unsigned long long)ts->tv_sec % 922337203685ULL) * 10000000ULL;
 #endif
 
 	/* Add another 100 ns if division yields remainder. */
-	nsec_res = (unsigned long long)ts->tv_nsec / 100 + !!((unsigned long long)ts->tv_nsec % 100);
+	nsec_res = (unsigned long)ts->tv_nsec / 100UL + !!((unsigned long)ts->tv_nsec % 100UL);
 
 #ifdef _USE_32BIT_TIME_T
 	return sec_res + nsec_res;
@@ -145,7 +144,7 @@ static long long _thrd_util_timespec_to_file_time_win32(
 
 	if (*periods && !res) {
 		--*periods;
-		return 9223372036850000000;
+		return 9223372036850000000LL;
 	}
 
 	return res;
@@ -160,20 +159,20 @@ static _Bool _thrd_util_timespec_to_milliseconds_win32(const struct timespec *ts
 
 	if (
 #ifdef _USE_32BIT_TIME_T
-		(unsigned long)ts->tv_sec > (INFINITE - 1) / 1000
+		(unsigned long)ts->tv_sec > (INFINITE - 1UL) / 1000UL
 #else
-		(unsigned long long)ts->tv_sec > (INFINITE - 1) / 1000
+		(unsigned long long)ts->tv_sec > (INFINITE - 1UL) / 1000UL
 #endif
 	) {
 		return 0;
 	}
 
-	sec_res = (unsigned long)ts->tv_sec * 1000;
+	sec_res = (unsigned long)ts->tv_sec * 1000UL;
 	/* Add another millisecond if division yields remainder. */
-	nsec_res = (unsigned long)ts->tv_nsec / 1000000 + !!((unsigned long)ts->tv_nsec % 1000000);
+	nsec_res = (unsigned long)ts->tv_nsec / 1000000UL + !!((unsigned long)ts->tv_nsec % 1000000UL);
 
 	/* Overflow. */
-	if (nsec_res > INFINITE - 1 - sec_res) {
+	if (nsec_res > INFINITE - 1UL - sec_res) {
 		return 0;
 	}
 
@@ -185,16 +184,16 @@ static _Bool _thrd_util_timespec_to_milliseconds_win32(const struct timespec *ts
 static void _thrd_util_file_time_to_timespec_win32(
 	unsigned long long file_time,
 #ifndef _USE_32BIT_TIME_T
-	size_t periods,
+	unsigned long long periods,
 #endif
 	struct timespec *ts
 )
 {
-	ts->tv_sec = file_time / 10000000;
+	ts->tv_sec = file_time / 10000000ULL;
 #ifndef _USE_32BIT_TIME_T
-	ts->tv_sec += periods * 922337203685;
+	ts->tv_sec += periods * 922337203685ULL;
 #endif
-	ts->tv_nsec = file_time % 10000000 * 100;
+	ts->tv_nsec = (file_time % 10000000ULL) * 100ULL;
 }
 
 /* ---- thread management ---- */
@@ -295,7 +294,7 @@ static void _thrd_run_tss_dtors_win32(void)
 	LeaveCriticalSection(&_tss_dtor_list_critical_section_win32);
 }
 
-static int _thrd_sleep_internal_win32(long long file_time_in, unsigned long long *file_time_out)
+static int _thrd_sleep_internal_win32(long long file_time_in, long long *file_time_out)
 {
 	void *timer;
 	unsigned long error;
@@ -343,17 +342,17 @@ static int _thrd_sleep_internal_win32(long long file_time_in, unsigned long long
 			time_result = (unsigned long long)time_end.QuadPart - (unsigned long long)time_start.QuadPart;
 
 			/* Would overflow. */
-			if (time_result > ULLONG_MAX / 10000000) {
-				time_result /= _thrd_perf_freq_win32.QuadPart; /* Try dividing first. */
+			if (time_result > (unsigned long long)-1 / 10000000ULL) {
+				time_result /= (unsigned long long)_thrd_perf_freq_win32.QuadPart; /* Try dividing first. */
 
 				/* Inaccurate version would still overflow. */
-				if (time_result > ULLONG_MAX / 10000000) {
+				if (time_result > (unsigned long long)-1 / 10000000ULL) {
 					*file_time_out = 0; /* Pretend remaining time is 0. */
 				} else {
-					*file_time_out -= time_result * 10000000; /* Return inaccurate result. */
+					*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL; /* Return inaccurate result. */
 				}
 			} else {
-				*file_time_out -= time_result * 10000000 / _thrd_perf_freq_win32.QuadPart;
+				*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL / (unsigned long long)_thrd_perf_freq_win32.QuadPart;
 			}
 
 			if (*file_time_out < 0) {
@@ -396,16 +395,16 @@ int _thrd_self_register_win32(void)
 	return thrd_success;
 }
 
-struct _thrd_start_thunk_parameters_win32 {
+struct _thrd_start_thunk_parameters_win32_t {
 	thrd_start_t func;
 	void *arg;
 };
 
-static int __stdcall _thrd_start_thunk_win32(struct _thrd_start_thunk_parameters_win32 *start_parameters)
+static int __stdcall _thrd_start_thunk_win32(struct _thrd_start_thunk_parameters_win32_t *start_parameters)
 {
 	int res;
-	struct _thrd_start_thunk_parameters_win32 local_start_params;
-	memcpy(&local_start_params, start_parameters, sizeof(struct _thrd_start_thunk_parameters_win32));
+	struct _thrd_start_thunk_parameters_win32_t local_start_params;
+	memcpy(&local_start_params, start_parameters, sizeof(struct _thrd_start_thunk_parameters_win32_t));
 	free(start_parameters);
 	res = local_start_params.func(local_start_params.arg);
 	_thrd_run_tss_dtors_win32();
@@ -418,7 +417,7 @@ int _thrd_create_win32(thrd_t *thr, thrd_start_t func, void *arg)
 	thrd_t thrd;
 	unsigned long error;
 
-	struct _thrd_start_thunk_parameters_win32 *thread_start_params;
+	struct _thrd_start_thunk_parameters_win32_t *thread_start_params;
 
 	thread_start_params = malloc(sizeof(*thread_start_params));
 	if (!thread_start_params) {
@@ -517,7 +516,7 @@ int _thrd_sleep_win32(const struct timespec *ts_in, struct timespec *rem_out)
 #ifndef _USE_32BIT_TIME_T
 restart_sleep:
 #endif
-	res = _thrd_sleep_internal_win32(file_time, rem_out ? (unsigned long long*)&file_time : NULL);
+	res = _thrd_sleep_internal_win32(file_time, rem_out ? &file_time : NULL);
 
 	if (res == -1 && rem_out) {
 		_thrd_util_file_time_to_timespec_win32(
@@ -532,7 +531,7 @@ restart_sleep:
 #ifndef _USE_32BIT_TIME_T
 	if (!res && periods) {
 		--periods;
-		file_time = 9223372036850000000;
+		file_time = 9223372036850000000LL;
 		goto restart_sleep;
 	}
 #endif
@@ -593,7 +592,7 @@ int _mtx_timedlock_win32(mtx_t *mtx, const struct timespec *ts)
 
 		sleep_time = C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100;
 		do {
-			sleep_res = _thrd_sleep_internal_win32(sleep_time, (unsigned long long*)&sleep_time);
+			sleep_res = _thrd_sleep_internal_win32(sleep_time, &sleep_time);
 		} while (sleep_res == -1);
 		if (sleep_res < -1) {
 			return thrd_error;
@@ -792,8 +791,8 @@ int _timespec_get_win32(struct timespec *ts, int base)
 	li.HighPart = file_time.dwHighDateTime;
 
 	/* Also subtract difference between FILETIME and UNIX time epoch. It's 369 years by the way. */
-	ts->tv_sec = li.QuadPart / 10000000 - 11644473600;
-	ts->tv_nsec = li.QuadPart % 10000000 * 100;
+	ts->tv_sec = li.QuadPart / 10000000ULL - 11644473600ULL;
+	ts->tv_nsec = (li.QuadPart % 10000000ULL) * 100ULL;
 
 	return base;
 }
