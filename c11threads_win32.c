@@ -64,7 +64,7 @@ static void _c11threads_assert_initialized_win32(void)
 	assert(_c11threads_initialized_win32);
 }
 
-void _c11threads_init_win32(void)
+void c11threads_init_win32(void)
 {
 	assert(!_c11threads_initialized_win32);
 	QueryPerformanceFrequency(&_c11threads_perf_freq_win32);
@@ -79,7 +79,7 @@ void _c11threads_init_win32(void)
 	_c11threads_initialized_win32 = 1;
 }
 
-void _c11threads_destroy_win32(void)
+void c11threads_destroy_win32(void)
 {
 	_c11threads_assert_initialized_win32();
 	_c11threads_initialized_win32 = 0;
@@ -448,7 +448,7 @@ static void _thrd_run_tss_dtors_win32(void)
 	LeaveCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 }
 
-int _c11threads_thrd_self_register_win32(void)
+int c11threads_thrd_self_register_win32(void)
 {
 	void *process;
 	void *thread;
@@ -465,7 +465,7 @@ int _c11threads_thrd_self_register_win32(void)
 	return thrd_success;
 }
 
-int _c11threads_thrd_register_win32(thrd_t thr)
+int c11threads_thrd_register_win32(thrd_t thr)
 {
 	void *h;
 
@@ -496,7 +496,7 @@ static int __stdcall _thrd_start_thunk_win32(struct _thrd_start_thunk_parameters
 	return res;
 }
 
-int _thrd_create_win32(thrd_t *thr, thrd_start_t func, void *arg)
+int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {
 	void *h;
 	thrd_t thrd;
@@ -535,13 +535,13 @@ int _thrd_create_win32(thrd_t *thr, thrd_start_t func, void *arg)
 	return error == ERROR_NOT_ENOUGH_MEMORY ? thrd_nomem : thrd_error;
 }
 
-void _thrd_exit_win32(int res)
+void thrd_exit(int res)
 {
 	_thrd_run_tss_dtors_win32();
 	ExitThread(res);
 }
 
-int _thrd_join_win32(thrd_t thr, int *res)
+int thrd_join(thrd_t thr, int *res)
 {
 	int ret;
 	void *h;
@@ -565,12 +565,12 @@ int _thrd_join_win32(thrd_t thr, int *res)
 	return ret;
 }
 
-int _thrd_detach_win32(thrd_t thr)
+int thrd_detach(thrd_t thr)
 {
 	return _thrd_deregister_win32(thr) ? thrd_success : thrd_error;
 }
 
-thrd_t _thrd_current_win32(void)
+thrd_t thrd_current(void)
 {
 	return GetCurrentThreadId();
 }
@@ -629,14 +629,14 @@ restart_sleep:
 	return res;
 }
 
-void _thrd_yield_win32(void)
+void thrd_yield(void)
 {
 	SwitchToThread();
 }
 
 /* ---- mutexes ---- */
 
-int _mtx_init_win32(mtx_t *mtx, int type)
+int mtx_init(mtx_t *mtx, int type)
 {
 	(void)type;
 #ifdef _MSC_VER
@@ -646,18 +646,18 @@ int _mtx_init_win32(mtx_t *mtx, int type)
 	return thrd_success;
 }
 
-void _mtx_destroy_win32(mtx_t *mtx)
+void mtx_destroy(mtx_t *mtx)
 {
 	DeleteCriticalSection((LPCRITICAL_SECTION)mtx);
 }
 
-int _mtx_lock_win32(mtx_t *mtx)
+int mtx_lock(mtx_t *mtx)
 {
 	EnterCriticalSection((LPCRITICAL_SECTION)mtx);
 	return thrd_success;
 }
 
-int _mtx_trylock_win32(mtx_t *mtx)
+int mtx_trylock(mtx_t *mtx)
 {
 	return TryEnterCriticalSection((LPCRITICAL_SECTION)mtx) ? thrd_success : thrd_busy;
 }
@@ -730,7 +730,7 @@ int _mtx_timedlock64_win32(mtx_t *mtx, const struct _c11threads_timespec64_win32
 	return thrd_success;
 }
 
-int _mtx_unlock_win32(mtx_t *mtx)
+int mtx_unlock(mtx_t *mtx)
 {
 	LeaveCriticalSection((LPCRITICAL_SECTION)mtx);
 	return thrd_success;
@@ -739,25 +739,25 @@ int _mtx_unlock_win32(mtx_t *mtx)
 /* ---- condition variables ---- */
 
 #ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
-int _cnd_init_win32(cnd_t *cond)
+int cnd_init(cnd_t *cond)
 {
 	InitializeConditionVariable((PCONDITION_VARIABLE)cond);
 	return thrd_success;
 }
 
-int _cnd_signal_win32(cnd_t *cond)
+int cnd_signal(cnd_t *cond)
 {
 	WakeConditionVariable((PCONDITION_VARIABLE)cond);
 	return thrd_success;
 }
 
-int _cnd_broadcast_win32(cnd_t *cond)
+int cnd_broadcast(cnd_t *cond)
 {
 	WakeAllConditionVariable((PCONDITION_VARIABLE)cond);
 	return thrd_success;
 }
 
-int _cnd_wait_win32(cnd_t *cond, mtx_t *mtx)
+int cnd_wait(cnd_t *cond, mtx_t *mtx)
 {
 	return SleepConditionVariableCS((PCONDITION_VARIABLE)cond, (PCRITICAL_SECTION)mtx, INFINITE) ? thrd_success : thrd_error;
 }
@@ -899,7 +899,7 @@ static void _tss_deregister_win32(tss_t key) {
 	LeaveCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 }
 
-int _tss_create_win32(tss_t *key, tss_dtor_t dtor)
+int tss_create(tss_t *key, tss_dtor_t dtor)
 {
 	*key = TlsAlloc();
 	if (*key == TLS_OUT_OF_INDEXES) {
@@ -913,18 +913,18 @@ int _tss_create_win32(tss_t *key, tss_dtor_t dtor)
 	return thrd_success;
 }
 
-void _tss_delete_win32(tss_t key)
+void tss_delete(tss_t key)
 {
 	_tss_deregister_win32(key);
 	TlsFree(key);
 }
 
-int _tss_set_win32(tss_t key, void *val)
+int tss_set(tss_t key, void *val)
 {
 	return TlsSetValue(key, val) ? thrd_success : thrd_error;
 }
 
-void *_tss_get_win32(tss_t key)
+void *tss_get(tss_t key)
 {
 	return TlsGetValue(key);
 }
