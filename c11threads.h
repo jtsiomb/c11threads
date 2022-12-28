@@ -25,19 +25,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <time.h>
 
 #ifndef thread_local
-#ifdef __STDC_VERSION__
-#if __STDC_VERSION__ <= 201710L /* The thread_local macro will be removed in C23. */
-#define C11THREADS_DEFINE_THREAD_LOCAL
-#endif
-#elif defined(__cplusplus)
-#if __cplusplus < 201103L /* C++11 has its own thread_local keyword. */
-#define C11THREADS_DEFINE_THREAD_LOCAL
-#endif
-#endif
-#endif
-
-#ifdef C11THREADS_DEFINE_THREAD_LOCAL
-#ifdef _WIN32
+#ifdef _MSC_VER
 #define thread_local		__declspec(thread)
 #else
 #define thread_local		_Thread_local
