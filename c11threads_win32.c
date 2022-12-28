@@ -67,9 +67,13 @@ static void _c11threads_assert_initialized_win32(void)
 void _c11threads_init_win32(void)
 {
 	QueryPerformanceFrequency(&_c11threads_perf_freq_win32);
-#pragma warning(suppress: 28125)
+#ifdef _MSC_VER
+#pragma warning(suppress: 28125) /* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
+#endif
 	InitializeCriticalSection(&_c11threads_thrd_list_critical_section_win32);
-#pragma warning(suppress: 28125)
+#ifdef _MSC_VER
+#pragma warning(suppress: 28125) /* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
+#endif
 	InitializeCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
 	_c11threads_initialized_win32 = 1;
 }
@@ -535,7 +539,9 @@ void _thrd_yield_win32(void)
 int _mtx_init_win32(mtx_t *mtx, int type)
 {
 	(void)type;
-#pragma warning(suppress: 28125)
+#ifdef _MSC_VER
+#pragma warning(suppress: 28125) /* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
+#endif
 	InitializeCriticalSection((LPCRITICAL_SECTION)mtx);
 	return thrd_success;
 }
