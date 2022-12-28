@@ -23,7 +23,6 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 #include <assert.h>
 #include <malloc.h>
-#include <memory.h>
 #include <stddef.h>
 
 /* Condition variables and one-time callables need at least Windows Vista. */
@@ -391,7 +390,7 @@ static int __stdcall _thrd_start_thunk_win32(struct _thrd_start_thunk_parameters
 {
 	int res;
 	struct _thrd_start_thunk_parameters_win32_t local_start_params;
-	memcpy(&local_start_params, start_parameters, sizeof(struct _thrd_start_thunk_parameters_win32_t));
+	local_start_params = *start_parameters;
 	free(start_parameters);
 	res = local_start_params.func(local_start_params.arg);
 	_thrd_run_tss_dtors_win32();
@@ -573,7 +572,7 @@ int _mtx_timedlock_win32(mtx_t *mtx, const struct timespec *ts)
 		if (!timespec_get(&ts_current, TIME_UTC)) {
 			return thrd_error;
 		}
-		if (ts_current.tv_sec > ts->tv_sec || ts_current.tv_sec == ts->tv_sec && ts_current.tv_nsec >= ts_current.tv_nsec) {
+		if (ts_current.tv_sec > ts->tv_sec || (ts_current.tv_sec == ts->tv_sec && ts_current.tv_nsec >= ts->tv_nsec)) {
 			return thrd_timedout;
 		}
 

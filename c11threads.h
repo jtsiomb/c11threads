@@ -501,7 +501,7 @@ static inline int cnd_wait(cnd_t *cond, mtx_t *mtx)
 static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 {
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_cnd_timedwait_win32(cond, mtx, ts);
+	return _cnd_timedwait_win32(cond, mtx, ts);
 #else
 	int res;
 
