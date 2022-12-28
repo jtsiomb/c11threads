@@ -251,6 +251,8 @@ static inline int thrd_self_register(void)
 {
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 	return _thrd_self_register_win32();
+#else
+	return thrd_success;
 #endif
 }
 
