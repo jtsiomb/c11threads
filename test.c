@@ -15,7 +15,7 @@
 
 mtx_t mtx;
 mtx_t mtx2;
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
 cnd_t cnd;
 #endif
 tss_t tss;
@@ -40,7 +40,7 @@ int main(void)
 	run_thread_test();
 	puts("end thread test\n");
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
 	puts("start timed mutex test");
 	run_timed_mtx_test();
 	puts("stop timed mutex test\n");
@@ -120,7 +120,7 @@ void run_thread_test(void)
 	}
 }
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
 int hold_mutex_three_seconds(void* arg)
 {
 	(void)arg;

@@ -25,17 +25,8 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <malloc.h>
 #include <stddef.h>
 
-/* Condition variables need at least Windows Vista. */
-#ifdef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
-#define WINVER 0x0400 /* Windows NT 4.0 */
-#define _WIN32_WINNT WINVER
-#endif
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-
-#if !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA) && _WIN32_WINNT < 0x0600 /* Windows Vista */
-#error c11threads: Cannot support condition variables on Windows older than Vista; define C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA or C11THREADS_PTHREAD_WIN32 (use libpthread)
-#endif
 
 
 /* ---- library ---- */
@@ -145,7 +136,6 @@ static long long _c11threads_util_timespec64_to_file_time_win32(const struct _c1
 	return res;
 }
 
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 /* Precondition: 'ts' validated. */
 static _Bool _c11threads_util_timespec32_to_milliseconds_win32(const struct _c11threads_timespec32_win32_t *ts, unsigned long *ms)
 {
@@ -191,7 +181,6 @@ static _Bool _c11threads_util_timespec64_to_milliseconds_win32(const struct _c11
 	*ms = sec_res + nsec_res;
 	return 1;
 }
-#endif
 
 /* Precondition: 'file_time' accumulated with 'periods' does not overflow. */
 static void _c11threads_util_file_time_to_timespec32_win32(unsigned long long file_time, struct _c11threads_timespec32_win32_t *ts)
@@ -738,7 +727,7 @@ int mtx_unlock(mtx_t *mtx)
 
 /* ---- condition variables ---- */
 
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
+#if _WIN32_WINNT >= 0x0600 /* Windows Vista */
 int cnd_init(cnd_t *cond)
 {
 	InitializeConditionVariable((PCONDITION_VARIABLE)cond);
@@ -931,7 +920,21 @@ void *tss_get(tss_t key)
 
 /* ---- misc ---- */
 
-void _call_once_win32_legacy(once_flag *flag, void (*func)(void))
+#if _WIN32_WINNT >= 0x0600 /* Windows Vista */
+static int __stdcall _call_once_thunk_win32(INIT_ONCE *init_once, void (*func)(void), void **context)
+{
+	(void)init_once;
+	(void)context;
+	func();
+	return 1;
+}
+
+void call_once(once_flag *flag, void (*func)(void))
+{
+	InitOnceExecuteOnce((PINIT_ONCE)flag, (PINIT_ONCE_FN)_call_once_thunk_win32, (void*)func, NULL);
+}
+#else
+void call_once(once_flag *flag, void (*func)(void))
 {
 	long long sleep_time;
 	int sleep_res;
@@ -950,20 +953,6 @@ void _call_once_win32_legacy(once_flag *flag, void (*func)(void))
 			}
 		}
 	}
-}
-
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
-static int __stdcall _call_once_thunk_win32(INIT_ONCE *init_once, void (*func)(void), void **context)
-{
-	(void)init_once;
-	(void)context;
-	func();
-	return 1;
-}
-
-void _call_once_win32(once_flag *flag, void (*func)(void))
-{
-	InitOnceExecuteOnce((PINIT_ONCE)flag, (PINIT_ONCE_FN)_call_once_thunk_win32, (void*)func, NULL);
 }
 #endif
 

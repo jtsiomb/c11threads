@@ -174,11 +174,11 @@ C11THREADS_MAYBE_INLINE int mtx_unlock(mtx_t *mtx);
 
 /* Condition variable functions. */
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
 C11THREADS_MAYBE_INLINE int cnd_init(cnd_t *cond);
 #endif
 static inline void cnd_destroy(cnd_t *cond);
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
 C11THREADS_MAYBE_INLINE int cnd_signal(cnd_t *cond);
 C11THREADS_MAYBE_INLINE int cnd_broadcast(cnd_t *cond);
 C11THREADS_MAYBE_INLINE int cnd_wait(cnd_t *cond, mtx_t *mtx);
@@ -194,7 +194,7 @@ C11THREADS_MAYBE_INLINE void *tss_get(tss_t key);
 
 /* One-time callable function. */
 
-static inline void call_once(once_flag *flag, void (*func)(void));
+C11THREADS_MAYBE_INLINE void call_once(once_flag *flag, void (*func)(void));
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
 #ifndef UTC_TIME
@@ -245,7 +245,7 @@ static inline void cnd_destroy(cnd_t *cond)
 	(void)cond;
 }
 
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
+#ifndef C11THREADS_NO_COND_WIN32
 #ifdef _USE_32BIT_TIME_T
 int _cnd_timedwait32_win32(cnd_t *cond, mtx_t *mtx, const struct _c11threads_timespec32_win32_t *ts);
 static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
@@ -262,20 +262,6 @@ static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *
 #endif
 
 /* ---- misc ---- */
-
-#ifdef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
-void _call_once_win32_legacy(once_flag *flag, void (*func)(void));
-static inline void call_once(once_flag *flag, void (*func)(void))
-{
-	_call_once_win32_legacy(flag, func);
-}
-#else
-void _call_once_win32(once_flag *flag, void (*func)(void));
-static inline void call_once(once_flag *flag, void (*func)(void))
-{
-	_call_once_win32(flag, func);
-}
-#endif
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
 #ifdef _USE_32BIT_TIME_T
