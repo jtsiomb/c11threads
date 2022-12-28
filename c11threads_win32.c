@@ -208,7 +208,7 @@ static void _c11threads_util_file_time_to_timespec64_win32(unsigned long long fi
 	ts->tv_nsec = (file_time % 10000000ULL) * 100ULL;
 }
 
-//#ifdef C11THREADS_NO_TIMESPEC_GET
+#ifdef C11THREADS_NO_TIMESPEC_GET
 int _c11threads_timespec32_get_win32(struct _c11threads_timespec32_win32_t *ts, int base)
 {
 	FILETIME file_time;
@@ -250,7 +250,7 @@ int _c11threads_timespec64_get_win32(struct _c11threads_timespec64_win32_t *ts, 
 
 	return base;
 }
-/*#else
+#else
 int _c11threads_timespec32_get_win32(struct _c11threads_timespec32_win32_t *ts, int base)
 {
 	return _timespec32_get((struct _timespec32*)ts, base);
@@ -260,7 +260,7 @@ int _c11threads_timespec64_get_win32(struct _c11threads_timespec64_win32_t *ts, 
 {
 	return _timespec64_get((struct _timespec64*)ts, base);
 }
-#endif*/
+#endif
 
 static int _c11threads_util_sleep_win32(long long file_time_in, long long *file_time_out)
 {
