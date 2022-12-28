@@ -141,6 +141,7 @@ static long long _c11threads_util_timespec_to_file_time_win32(
 #endif
 }
 
+#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 /* Precondition: 'ts' validated. */
 static _Bool _c11threads_util_timespec_to_milliseconds_win32(const struct timespec *ts, unsigned long *ms)
 {
@@ -169,6 +170,7 @@ static _Bool _c11threads_util_timespec_to_milliseconds_win32(const struct timesp
 	*ms = sec_res + nsec_res;
 	return 1;
 }
+#endif
 
 /* Precondition: 'file_time' accumulated with 'periods' does not overflow. */
 static void _c11threads_util_file_time_to_timespec_win32(
