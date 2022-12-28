@@ -274,7 +274,7 @@ static inline int timespec_get(struct timespec *ts, int base)
 static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {
 	int res = pthread_create(thr, 0, (void*(*)(void*))func, arg);
-	if (res == 0) {
+	if(res == 0) {
 		return thrd_success;
 	}
 	return res == ENOMEM ? thrd_nomem : thrd_error;
@@ -289,10 +289,10 @@ static inline int thrd_join(thrd_t thr, int *res)
 {
 	void *retval;
 
-	if (pthread_join(thr, &retval) != 0) {
+	if(pthread_join(thr, &retval) != 0) {
 		return thrd_error;
 	}
-	if (res) {
+	if(res) {
 		*res = (int)(intptr_t)retval;
 	}
 	return thrd_success;
@@ -315,8 +315,8 @@ static inline int thrd_equal(thrd_t a, thrd_t b)
 
 static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
-	if (nanosleep(ts_in, rem_out) < 0) {
-		if (errno == EINTR) return -1;
+	if(nanosleep(ts_in, rem_out) < 0) {
+		if(errno == EINTR) return -1;
 		return -2;
 	}
 	return 0;
@@ -336,14 +336,14 @@ static inline int mtx_init(mtx_t *mtx, int type)
 
 	pthread_mutexattr_init(&attr);
 
-	if (type & mtx_timed) {
+	if(type & mtx_timed) {
 #ifdef PTHREAD_MUTEX_TIMED_NP
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_TIMED_NP);
 #else
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
 #endif
 	}
-	if (type & mtx_recursive) {
+	if(type & mtx_recursive) {
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 	}
 
@@ -360,7 +360,7 @@ static inline void mtx_destroy(mtx_t *mtx)
 static inline int mtx_lock(mtx_t *mtx)
 {
 	int res = pthread_mutex_lock(mtx);
-	if (res == EDEADLK) {
+	if(res == EDEADLK) {
 		return thrd_busy;
 	}
 	return res == 0 ? thrd_success : thrd_error;
@@ -369,7 +369,7 @@ static inline int mtx_lock(mtx_t *mtx)
 static inline int mtx_trylock(mtx_t *mtx)
 {
 	int res = pthread_mutex_trylock(mtx);
-	if (res == EBUSY) {
+	if(res == EBUSY) {
 		return thrd_busy;
 	}
 	return res == 0 ? thrd_success : thrd_error;
@@ -386,18 +386,18 @@ static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 	sleeptime.tv_sec = 0;
 	sleeptime.tv_nsec = C11THREADS_TIMEDLOCK_POLL_INTERVAL;
 
-	while ((res = pthread_mutex_trylock(mtx)) == EBUSY) {
+	while((res = pthread_mutex_trylock(mtx)) == EBUSY) {
 		gettimeofday(&now, NULL);
 
-		if (now.tv_sec > ts->tv_sec || (now.tv_sec == ts->tv_sec &&
-			(now.tv_usec * 1000) >= ts->tv_nsec)) {
+		if(now.tv_sec > ts->tv_sec || (now.tv_sec == ts->tv_sec &&
+					(now.tv_usec * 1000) >= ts->tv_nsec)) {
 			return thrd_timedout;
 		}
 
 		nanosleep(&sleeptime, NULL);
 	}
 #else
-	if ((res = pthread_mutex_timedlock(mtx, ts)) == ETIMEDOUT) {
+	if((res = pthread_mutex_timedlock(mtx, ts)) == ETIMEDOUT) {
 		return thrd_timedout;
 	}
 #endif
@@ -440,7 +440,7 @@ static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *
 {
 	int res;
 
-	if ((res = pthread_cond_timedwait(cond, mtx, ts)) != 0) {
+	if((res = pthread_cond_timedwait(cond, mtx, ts)) != 0) {
 		return res == ETIMEDOUT ? thrd_timedout : thrd_error;
 	}
 	return thrd_success;
@@ -480,17 +480,16 @@ static inline int timespec_get(struct timespec *ts, int base)
 {
 	struct timeval tv;
 
-	if (base != TIME_UTC) {
+	if(base != TIME_UTC) {
 		return 0;
 	}
 
-	if (gettimeofday(&tv, 0) == -1) {
+	if(gettimeofday(&tv, 0) == -1) {
 		return 0;
 	}
 
 	ts->tv_sec = tv.tv_sec;
 	ts->tv_nsec = tv.tv_usec * 1000;
-
 	return base;
 }
 #endif
