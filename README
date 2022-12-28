@@ -17,10 +17,9 @@ where the system API doesn't quite match the requirements.
 
 How to use
 ----------
-No installation, no compilation, just drop c11threads.h into your project, and
-don't forget to link with "-lpthread" on POSIX-like systems.
-
 For pthread users:
+No installation, no compilation, just drop c11threads.h into your project, and
+don't forget to link with "-lpthread".
 This library is extremely thin and implemented directly in the header file as a
 bunch of "static inline" functions (you do have at least C99 functionality while
 trying to use C11 threads, right?). Define "C11THREADS_PTHREAD_WIN32" if you are
@@ -30,8 +29,8 @@ For non-pthread users on Windows:
 You need to compile c11threads_win32.c and link with it. Define
 "C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA" if you wish to support Windows all
 the way back to NT 4.0 by forgoing condition variables and "call_once()"
-support. Call "thrd_init()" before using the library and "thrd_destroy()" after
-you are done.
+support. Call "c11threads_init()" before using the library and
+"c11threads_destroy()" after you are done.
 
 If you'd like to use this with a C89 compiler, just search&replace or
 define-away all instances of "inline" to oblivion. Each object file will get a
