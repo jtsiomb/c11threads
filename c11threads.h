@@ -79,7 +79,6 @@ Main project site: https://github.com/jtsiomb/c11threads
 /* types */
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 typedef unsigned long thrd_t;
-#pragma pack(push, 8)
 typedef struct {
 	void *debug_info;
 	long lock_count;
@@ -88,7 +87,6 @@ typedef struct {
 	void *lock_semaphore;
 	void *spin_count;
 } mtx_t;
-#pragma pack(pop)
 #ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 typedef struct {
 	void *ptr;
