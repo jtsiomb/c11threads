@@ -45,7 +45,9 @@ Main project site: https://github.com/jtsiomb/c11threads
 #endif
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
+#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 #define ONCE_FLAG_INIT		{0}
+#endif
 #define TSS_DTOR_ITERATIONS	4
 #else
 #define ONCE_FLAG_INIT		PTHREAD_ONCE_INIT
@@ -91,11 +93,11 @@ typedef struct {
 typedef struct {
 	void *ptr;
 } cnd_t;
-#endif
 typedef unsigned long tss_t;
 typedef struct {
 	void *ptr;
 } once_flag;
+#endif
 #else
 typedef pthread_t thrd_t;
 typedef pthread_mutex_t mtx_t;
@@ -183,234 +185,322 @@ static inline int timespec_get(struct timespec *ts, int base);
 #endif
 
 
-/* ---- platform ---- */
-
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
+
+/* ---- library ---- */
+
 void _c11threads_init_win32(void);
+static inline void c11threads_init(void)
+{
+	_c11threads_init_win32();
+}
+
 void _c11threads_destroy_win32(void);
+static inline void c11threads_destroy(void)
+{
+	_c11threads_destroy_win32();
+}
+
+/* ---- thread management ---- */
 
 int _c11threads_thrd_self_register_win32(void);
+static inline int c11threads_thrd_self_register(void)
+{
+	return _c11threads_thrd_self_register_win32();
+}
+
 int _thrd_create_win32(thrd_t *thr, thrd_start_t func, void *arg);
+static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
+{
+	return _thrd_create_win32(thr, func, arg);
+}
+
 void _thrd_exit_win32(int res);
+static inline void thrd_exit(int res)
+{
+	_thrd_exit_win32(res);
+}
+
 int _thrd_join_win32(thrd_t thr, int *res);
+static inline int thrd_join(thrd_t thr, int *res)
+{
+	return _thrd_join_win32(thr, res);
+}
+
 int _thrd_detach_win32(thrd_t thr);
+static inline int thrd_detach(thrd_t thr)
+{
+	return _thrd_detach_win32(thr);
+}
+
 thrd_t _thrd_current_win32(void);
+static inline thrd_t thrd_current(void)
+{
+	return _thrd_current_win32();
+}
+
+static inline int thrd_equal(thrd_t a, thrd_t b)
+{
+	return a == b;
+}
+
 int _thrd_sleep_win32(const struct timespec *ts_in, struct timespec *rem_out);
+static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
+{
+	return _thrd_sleep_win32(ts_in, rem_out);
+}
+
 void _thrd_yield_win32(void);
+static inline void thrd_yield(void)
+{
+	_thrd_yield_win32();
+}
+
+/* ---- mutexes ---- */
 
 int _mtx_init_win32(mtx_t *mtx, int type);
-void _mtx_destroy_win32(mtx_t *mtx);
-int _mtx_lock_win32(mtx_t *mtx);
-int _mtx_trylock_win32(mtx_t *mtx);
-int _mtx_timedlock_win32(mtx_t *mtx, const struct timespec *ts);
-int _mtx_unlock_win32(mtx_t *mtx);
+static inline int mtx_init(mtx_t *mtx, int type)
+{
+	return _mtx_init_win32(mtx, type);
+}
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+void _mtx_destroy_win32(mtx_t *mtx);
+static inline void mtx_destroy(mtx_t *mtx)
+{
+	_mtx_destroy_win32(mtx);
+}
+
+int _mtx_lock_win32(mtx_t *mtx);
+static inline int mtx_lock(mtx_t *mtx)
+{
+	return _mtx_lock_win32(mtx);
+}
+
+int _mtx_trylock_win32(mtx_t *mtx);
+static inline int mtx_trylock(mtx_t *mtx)
+{
+	return _mtx_trylock_win32(mtx);
+}
+
+int _mtx_timedlock_win32(mtx_t *mtx, const struct timespec *ts);
+static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
+{
+	return _mtx_timedlock_win32(mtx, ts);
+}
+
+int _mtx_unlock_win32(mtx_t *mtx);
+static inline int mtx_unlock(mtx_t *mtx)
+{
+	return _mtx_unlock_win32(mtx);
+}
+
+/* ---- condition variables ---- */
+
+#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 int _cnd_init_win32(cnd_t *cond);
+static inline int cnd_init(cnd_t *cond)
+{
+	return _cnd_init_win32(cond);
+}
+
+static inline void cnd_destroy(cnd_t *cond)
+{
+	(void)cond;
+}
+
 int _cnd_signal_win32(cnd_t *cond);
+static inline int cnd_signal(cnd_t *cond)
+{
+	return _cnd_signal_win32(cond);
+}
+
 int _cnd_broadcast_win32(cnd_t *cond);
+static inline int cnd_broadcast(cnd_t *cond)
+{
+	return _cnd_broadcast_win32(cond);
+}
+
 int _cnd_wait_win32(cnd_t *cond, mtx_t *mtx);
+static inline int cnd_wait(cnd_t *cond, mtx_t *mtx)
+{
+	return _cnd_wait_win32(cond, mtx);
+}
+
 int _cnd_timedwait_win32(cnd_t *cond, mtx_t *mtx, const struct timespec *ts);
+static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
+{
+	return _cnd_timedwait_win32(cond, mtx, ts);
+}
 #endif
 
-int _tss_create_win32(tss_t *key, tss_dtor_t dtor);
-void _tss_delete_win32(tss_t key);
-int _tss_set_win32(tss_t key, void *val);
-void *_tss_get_win32(tss_t key);
+/* ---- thread-specific data ---- */
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+int _tss_create_win32(tss_t *key, tss_dtor_t dtor);
+static inline int tss_create(tss_t *key, tss_dtor_t dtor)
+{
+	return _tss_create_win32(key, dtor);
+}
+
+void _tss_delete_win32(tss_t key);
+static inline void tss_delete(tss_t key)
+{
+	_tss_delete_win32(key);
+}
+
+int _tss_set_win32(tss_t key, void *val);
+static inline int tss_set(tss_t key, void *val)
+{
+	return _tss_set_win32(key, val);
+}
+
+void *_tss_get_win32(tss_t key);
+static inline void *tss_get(tss_t key)
+{
+	return _tss_get_win32(key);
+}
+
+/* ---- misc ---- */
+
+#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 void _call_once_win32(once_flag *flag, void (*func)(void));
+static inline void call_once(once_flag *flag, void (*func)(void))
+{
+	_call_once_win32(flag, func);
+}
 #endif
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
 int _timespec_get_win32(struct timespec *ts, int base);
+static inline int timespec_get(struct timespec *ts, int base)
+{
+	return _timespec_get_win32(ts, base);
+}
 #endif
-#endif
+
+#else /* !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) */
 
 /* ---- library ---- */
 
 static inline void c11threads_init(void)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_c11threads_init_win32();
-#endif
 }
 
 static inline void c11threads_destroy(void)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_c11threads_destroy_win32();
-#endif
 }
 
 /* ---- thread management ---- */
 
 static inline int c11threads_thrd_self_register(void)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _c11threads_thrd_self_register_win32();
-#else
-	return thrd_success;
-#endif
 }
 
 static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _thrd_create_win32(thr, func, arg);
-#else
 	int res = pthread_create(thr, 0, (void*(*)(void*))func, arg);
-	if(res == 0) {
+	if (res == 0) {
 		return thrd_success;
 	}
 	return res == ENOMEM ? thrd_nomem : thrd_error;
-#endif
 }
 
 static inline void thrd_exit(int res)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_thrd_exit_win32(res);
-#else
 	pthread_exit((void*)(intptr_t)res);
-#endif
 }
 
 static inline int thrd_join(thrd_t thr, int *res)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _thrd_join_win32(thr, res);
-#else
 	void *retval;
 
-	if(pthread_join(thr, &retval) != 0) {
+	if (pthread_join(thr, &retval) != 0) {
 		return thrd_error;
 	}
-	if(res) {
+	if (res) {
 		*res = (int)(intptr_t)retval;
 	}
 	return thrd_success;
-#endif
 }
 
 static inline int thrd_detach(thrd_t thr)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _thrd_detach_win32(thr);
-#else
 	return pthread_detach(thr) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline thrd_t thrd_current(void)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _thrd_current_win32();
-#else
 	return pthread_self();
-#endif
 }
 
 static inline int thrd_equal(thrd_t a, thrd_t b)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return a == b;
-#else
 	return pthread_equal(a, b);
-#endif
 }
 
 static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _thrd_sleep_win32(ts_in, rem_out);
-#else
-	if(nanosleep(ts_in, rem_out) < 0) {
-		if(errno == EINTR) return -1;
+	if (nanosleep(ts_in, rem_out) < 0) {
+		if (errno == EINTR) return -1;
 		return -2;
 	}
 	return 0;
-#endif
 }
 
 static inline void thrd_yield(void)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_thrd_yield_win32();
-#else
 	sched_yield();
-#endif
 }
 
 /* ---- mutexes ---- */
 
 static inline int mtx_init(mtx_t *mtx, int type)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _mtx_init_win32(mtx, type);
-#else
 	int res;
 	pthread_mutexattr_t attr;
 
 	pthread_mutexattr_init(&attr);
 
-	if(type & mtx_timed) {
+	if (type & mtx_timed) {
 #ifdef PTHREAD_MUTEX_TIMED_NP
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_TIMED_NP);
 #else
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
 #endif
 	}
-	if(type & mtx_recursive) {
+	if (type & mtx_recursive) {
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 	}
 
 	res = pthread_mutex_init(mtx, &attr) == 0 ? thrd_success : thrd_error;
 	pthread_mutexattr_destroy(&attr);
 	return res;
-#endif
 }
 
 static inline void mtx_destroy(mtx_t *mtx)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_mtx_destroy_win32(mtx);
-#else
 	pthread_mutex_destroy(mtx);
-#endif
 }
 
 static inline int mtx_lock(mtx_t *mtx)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _mtx_lock_win32(mtx);
-#else
 	int res = pthread_mutex_lock(mtx);
-	if(res == EDEADLK) {
+	if (res == EDEADLK) {
 		return thrd_busy;
 	}
 	return res == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline int mtx_trylock(mtx_t *mtx)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _mtx_trylock_win32(mtx);
-#else
 	int res = pthread_mutex_trylock(mtx);
-	if(res == EBUSY) {
+	if (res == EBUSY) {
 		return thrd_busy;
 	}
 	return res == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _mtx_timedlock_win32(mtx, ts);
-#else
 	int res = 0;
 #ifdef C11THREADS_NO_TIMED_MUTEX
 	/* fake a timedlock by polling trylock in a loop and waiting for a bit */
@@ -420,161 +510,105 @@ static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 	sleeptime.tv_sec = 0;
 	sleeptime.tv_nsec = C11THREADS_TIMEDLOCK_POLL_INTERVAL;
 
-	while((res = pthread_mutex_trylock(mtx)) == EBUSY) {
+	while ((res = pthread_mutex_trylock(mtx)) == EBUSY) {
 		gettimeofday(&now, NULL);
 
-		if(now.tv_sec > ts->tv_sec || (now.tv_sec == ts->tv_sec &&
-					(now.tv_usec * 1000) >= ts->tv_nsec)) {
+		if (now.tv_sec > ts->tv_sec || (now.tv_sec == ts->tv_sec &&
+			(now.tv_usec * 1000) >= ts->tv_nsec)) {
 			return thrd_timedout;
 		}
 
 		nanosleep(&sleeptime, NULL);
 	}
 #else
-	if((res = pthread_mutex_timedlock(mtx, ts)) == ETIMEDOUT) {
+	if ((res = pthread_mutex_timedlock(mtx, ts)) == ETIMEDOUT) {
 		return thrd_timedout;
 	}
 #endif
 	return res == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline int mtx_unlock(mtx_t *mtx)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _mtx_unlock_win32(mtx);
-#else
 	return pthread_mutex_unlock(mtx) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 /* ---- condition variables ---- */
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 static inline int cnd_init(cnd_t *cond)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _cnd_init_win32(cond);
-#else
 	return pthread_cond_init(cond, 0) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline void cnd_destroy(cnd_t *cond)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	(void)cond;
-#else
 	pthread_cond_destroy(cond);
-#endif
 }
 
 static inline int cnd_signal(cnd_t *cond)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _cnd_signal_win32(cond);
-#else
 	return pthread_cond_signal(cond) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline int cnd_broadcast(cnd_t *cond)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _cnd_broadcast_win32(cond);
-#else
 	return pthread_cond_broadcast(cond) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline int cnd_wait(cnd_t *cond, mtx_t *mtx)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _cnd_wait_win32(cond, mtx);
-#else
 	return pthread_cond_wait(cond, mtx) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _cnd_timedwait_win32(cond, mtx, ts);
-#else
 	int res;
 
-	if((res = pthread_cond_timedwait(cond, mtx, ts)) != 0) {
+	if ((res = pthread_cond_timedwait(cond, mtx, ts)) != 0) {
 		return res == ETIMEDOUT ? thrd_timedout : thrd_error;
 	}
 	return thrd_success;
-#endif
 }
-#endif
 
 /* ---- thread-specific data ---- */
 
 static inline int tss_create(tss_t *key, tss_dtor_t dtor)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _tss_create_win32(key, dtor);
-#else
 	return pthread_key_create(key, dtor) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline void tss_delete(tss_t key)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_tss_delete_win32(key);
-#else
 	pthread_key_delete(key);
-#endif
 }
 
 static inline int tss_set(tss_t key, void *val)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _tss_set_win32(key, val);
-#else
 	return pthread_setspecific(key, val) == 0 ? thrd_success : thrd_error;
-#endif
 }
 
 static inline void *tss_get(tss_t key)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _tss_get_win32(key);
-#else
 	return pthread_getspecific(key);
-#endif
 }
 
 /* ---- misc ---- */
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 static inline void call_once(once_flag *flag, void (*func)(void))
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	_call_once_win32(flag, func);
-#else
 	pthread_once(flag, func);
-#endif
 }
-#endif
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
 static inline int timespec_get(struct timespec *ts, int base)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	return _timespec_get_win32(ts, base);
-#else
 	struct timeval tv;
 
-	if(base != TIME_UTC) {
+	if (base != TIME_UTC) {
 		return 0;
 	}
 
-	if(gettimeofday(&tv, 0) == -1) {
+	if (gettimeofday(&tv, 0) == -1) {
 		return 0;
 	}
 
@@ -582,8 +616,9 @@ static inline int timespec_get(struct timespec *ts, int base)
 	ts->tv_nsec = tv.tv_usec * 1000;
 
 	return base;
-#endif
 }
 #endif
+
+#endif  /* !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) */
 
 #endif	/* C11THREADS_H_ */
