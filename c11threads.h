@@ -93,7 +93,9 @@ typedef struct {
 typedef struct {
 	void *ptr;
 } cnd_t;
+#endif
 typedef unsigned long tss_t;
+#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 typedef struct {
 	void *ptr;
 } once_flag;
