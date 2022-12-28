@@ -517,7 +517,7 @@ int _thrd_sleep_win32(const struct timespec *ts_in, struct timespec *rem_out)
 #ifndef _USE_32BIT_TIME_T
 restart_sleep:
 #endif
-	res = _thrd_sleep_internal_win32(file_time, rem_out ? (unsigned long long*) & file_time : NULL);
+	res = _thrd_sleep_internal_win32(file_time, rem_out ? (unsigned long long*)&file_time : NULL);
 
 	if (res == -1 && rem_out) {
 		_thrd_util_file_time_to_timespec_win32(
