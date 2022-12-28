@@ -18,6 +18,9 @@
     <ClCompile Include="..\test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\c11threads_win32.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\c11threads.h">

@@ -1,9 +1,12 @@
+/* Test program for c11threads. */
+
+/* Needed for memory leak detection. */
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
 #endif
 
-#define C11THREADS_DEFINE_GLOBALS /* Pull variable definitions in here since this is the only source file. */
 #include "c11threads.h"
 
 #include <stddef.h>
@@ -12,10 +15,13 @@
 
 mtx_t mtx;
 mtx_t mtx2;
-cnd_t cnd;
 tss_t tss;
-once_flag once = ONCE_FLAG_INIT;
 int flag;
+
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
+cnd_t cnd;
+once_flag once = ONCE_FLAG_INIT;
+#endif
 
 #define CHK_THRD(a) assert_thrd_success(a, __FILE__, __LINE__, #a)
 #define NUM_THREADS 4
@@ -27,21 +33,39 @@ void run_call_once_test(void);
 
 int main(void)
 {
+	thrd_init();
+
 	puts("start thread test");
 	run_thread_test();
 	puts("end thread test\n");
 
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 	puts("start timed mutex test");
 	run_timed_mtx_test();
 	puts("stop timed mutex test\n");
+#else
+	puts("skip timed mutex test on win32 < vista\n");
+#endif
 
 	puts("start thread-specific storage test");
 	run_tss_test();
 	puts("stop thread-specific storage test\n");
 
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 	puts("start call once test");
 	run_call_once_test();
 	puts("stop call once test\n");
+#else
+	puts("skip call once test on win32 < vista\n");
+#endif
+
+	thrd_destroy();
+
+#ifdef _WIN32
+	if (_CrtDumpMemoryLeaks()) {
+		abort();
+	}
+#endif
 
 	puts("tests finished");
 }
@@ -97,6 +121,7 @@ void run_thread_test(void)
 	}
 }
 
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 int hold_mutex_three_seconds(void* arg)
 {
 	(void)arg;
@@ -162,6 +187,7 @@ void run_timed_mtx_test(void)
 	mtx_destroy(&mtx);
 	CHK_THRD(thrd_join(thread, NULL));
 }
+#endif
 
 void my_tss_dtor(void *arg)
 {
@@ -196,8 +222,10 @@ void run_tss_test(void)
 	CHK_THRD(tss_create(&tss, my_tss_dtor));
 	CHK_THRD(thrd_create(&thread, my_tss_thread_func, NULL));
 	CHK_THRD(thrd_join(thread, NULL));
+	tss_delete(tss);
 }
 
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 void my_call_once_func(void)
 {
 	puts("my_call_once_func() was called");
@@ -234,3 +262,4 @@ void run_call_once_test(void)
 		abort();
 	}
 }
+#endif

@@ -1,30 +1,37 @@
-Trivial C11 threads.h implementation over POSIX threads.
+Trivial C11 threads.h implementation over POSIX threads and not-so-trivial
+implementation over Win32 threads.
 
 Rationale
 ---------
 GNU libc doesn't implement the thread part of the C library from the recent C11
 standard, even though recent versions of gcc do support other aspects of it
-(like atomics). Likewise, Microsoft's STL also doesn't implement C11 threading.
+(like atomics). Likewise, Microsoft's VCRT also doesn't implement C11 threading.
 
 If you're starting a new multithreaded project in C right now, it would make
 sense to use the standard C way of using threads instead of a mishmash of
 various platform-specific APIs.
 
 So until the system libc adds support for it, we need a stopgap that works
-exactly as the C standard describes.
+exactly as the C standard describes, though on a best effort basis for Win32,
+where the system API doesn't quite match the requirements.
 
 How to use
 ----------
 No installation, no compilation, just drop c11threads.h into your project, and
-don't forget to link with "-lpthread".
+don't forget to link with "-lpthread" on POSIX-like systems.
 
-Note for Windows users: One of your source files needs to define
-"C11THREADS_DEFINE_GLOBALS" before including the header. On other platforms,
-this will do nothing.
-
+For pthread users:
 This library is extremely thin and implemented directly in the header file as a
 bunch of "static inline" functions (you do have at least C99 functionality while
-trying to use C11 threads, right?).
+trying to use C11 threads, right?). Define "C11THREADS_PTHREAD_WIN32" if you are
+compiling for Win32.
+
+For non-pthread users on Windows:
+You need to compile c11threads_win32.c and link with it. Define
+"C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA" if you wish to support Windows all
+the way back to NT 4.0 by forgoing condition variables and "call_once()"
+support. Call "thrd_init()" before using the library and "thrd_destroy()" after
+you are done.
 
 If you'd like to use this with a C89 compiler, just search&replace or
 define-away all instances of "inline" to oblivion. Each object file will get a
@@ -33,11 +40,12 @@ reasonably modern system (say anything after the 80s).
 
 License
 -------
-Authors: John Tsiombikas <nuclear@member.fsf.org>
-         Oliver Old <oliver.old@outlook.com>
+Authors:
+John Tsiombikas <nuclear@member.fsf.org>
+Oliver Old <oliver.old@outlook.com>
 
 I place this piece of code in the public domain. Feel free to use as you see
-fit. I'd appreciate it if you keep my name at the top of the code somehwere, but
+fit. I'd appreciate it if you keep my name at the top of the code somewhere, but
 whatever.
 
 Main project site: https://github.com/jtsiomb/c11threads
