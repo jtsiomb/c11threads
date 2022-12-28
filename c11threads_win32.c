@@ -66,6 +66,7 @@ static void _c11threads_assert_initialized_win32(void)
 
 void _c11threads_init_win32(void)
 {
+	assert(!_c11threads_initialized_win32);
 	QueryPerformanceFrequency(&_c11threads_perf_freq_win32);
 #ifdef _MSC_VER
 #pragma warning(suppress: 28125) /* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
@@ -81,13 +82,11 @@ void _c11threads_init_win32(void)
 void _c11threads_destroy_win32(void)
 {
 	_c11threads_assert_initialized_win32();
-	if (_c11threads_initialized_win32) {
-		_c11threads_initialized_win32 = 0;
-		assert(!_c11threads_tss_dtor_list_win32);
-		assert(!_c11threads_thrd_list_win32);
-		DeleteCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
-		DeleteCriticalSection(&_c11threads_thrd_list_critical_section_win32);
-	}
+	_c11threads_initialized_win32 = 0;
+	assert(!_c11threads_tss_dtor_list_win32);
+	assert(!_c11threads_thrd_list_win32);
+	DeleteCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
+	DeleteCriticalSection(&_c11threads_thrd_list_critical_section_win32);
 }
 
 /* ---- utilities ---- */
@@ -192,14 +191,15 @@ static void _c11threads_util_file_time_to_timespec_win32(
 
 static _Bool _thrd_register_win32(thrd_t thrd, HANDLE h)
 {
-	_Bool res;
+	_Bool allocated;
 	struct _c11threads_thrd_entry_win32_t **curr;
 
-	res = 0;
+	allocated = 0;
 	_c11threads_assert_initialized_win32();
 	EnterCriticalSection(&_c11threads_thrd_list_critical_section_win32);
 	curr = &_c11threads_thrd_list_win32;
 	while (*curr) {
+		assert((*curr)->thrd != thrd);
 		curr = &(*curr)->next;
 	}
 	*curr = malloc(sizeof(**curr));
@@ -207,19 +207,19 @@ static _Bool _thrd_register_win32(thrd_t thrd, HANDLE h)
 		(*curr)->thrd = thrd;
 		(*curr)->h = h;
 		(*curr)->next = NULL;
-		res = 1;
+		allocated = 1;
 	}
 	LeaveCriticalSection(&_c11threads_thrd_list_critical_section_win32);
-	return res;
+	return allocated;
 }
 
 static _Bool _thrd_deregister_win32(thrd_t thrd)
 {
-	_Bool res;
+	_Bool found;
 	struct _c11threads_thrd_entry_win32_t *prev;
 	struct _c11threads_thrd_entry_win32_t *curr;
 
-	res = 0;
+	found = 0;
 	_c11threads_assert_initialized_win32();
 	EnterCriticalSection(&_c11threads_thrd_list_critical_section_win32);
 	prev = NULL;
@@ -233,14 +233,15 @@ static _Bool _thrd_deregister_win32(thrd_t thrd)
 			}
 			CloseHandle(curr->h);
 			free(curr);
-			res = 1;
+			found = 1;
 			break;
 		}
 		prev = curr;
 		curr = curr->next;
 	}
+	assert(found);
 	LeaveCriticalSection(&_c11threads_thrd_list_critical_section_win32);
-	return res;
+	return found;
 }
 
 static void _thrd_run_tss_dtors_win32(void)
@@ -377,11 +378,28 @@ int _c11threads_thrd_self_register_win32(void)
 
 	process = GetCurrentProcess();
 	thread = GetCurrentThread();
-	if (!DuplicateHandle(process, thread, process, &thread, 0, 0, DUPLICATE_SAME_ACCESS)) {
+	if (!DuplicateHandle(process, thread, process, &thread, STANDARD_RIGHTS_REQUIRED, 0, 0)) {
 		return thrd_error;
 	}
 	if (!_thrd_register_win32(GetCurrentThreadId(), thread)) {
 		CloseHandle(thread);
+		return thrd_nomem;
+	}
+	return thrd_success;
+}
+
+int _c11threads_thrd_register_win32(thrd_t thr)
+{
+	void *process;
+	void *h;
+
+	process = GetCurrentProcess();
+	h = OpenThread(STANDARD_RIGHTS_REQUIRED, 0, thr);
+	if (!h) {
+		return thrd_error;
+	}
+	if (!_thrd_register_win32(thr, h)) {
+		CloseHandle(h);
 		return thrd_nomem;
 	}
 	return thrd_success;

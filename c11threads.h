@@ -125,15 +125,21 @@ enum {
 
 /* Library functions. */
 
+#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 /* Win32: Initialize library. */
-static inline void c11threads_init(void);
+static inline void c11threads_init_win32(void);
 /* Win32: Destroy library. */
-static inline void c11threads_destroy(void);
+static inline void c11threads_destroy_win32(void);
+#endif
 
 /* Thread functions. */
 
-/* Win32: Register foreign thread in c11threads to allow for proper thrd_join(). Memory leak if neither joined nor detached. */
-static inline int c11threads_thrd_self_register(void);
+#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
+/* Win32: Register current Win32 thread in c11threads to allow for proper thrd_join(). Memory leak if neither joined nor detached. */
+static inline int c11threads_thrd_self_register_win32(void);
+/* Win32: Register other Win32 thread by ID in c11threads to allow for proper thrd_join(). Memory leak if neither joined nor detached. */
+static inline int c11threads_thrd_register_win32(thrd_t thr);
+#endif
 static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
 /* Win32: Threads not created with thrd_create() need to call this to clean up TSS. */
 static inline void thrd_exit(int res);
@@ -190,13 +196,13 @@ static inline int timespec_get(struct timespec *ts, int base);
 /* ---- library ---- */
 
 void _c11threads_init_win32(void);
-static inline void c11threads_init(void)
+static inline void c11threads_init_win32(void)
 {
 	_c11threads_init_win32();
 }
 
 void _c11threads_destroy_win32(void);
-static inline void c11threads_destroy(void)
+static inline void c11threads_destroy_win32(void)
 {
 	_c11threads_destroy_win32();
 }
@@ -204,9 +210,15 @@ static inline void c11threads_destroy(void)
 /* ---- thread management ---- */
 
 int _c11threads_thrd_self_register_win32(void);
-static inline int c11threads_thrd_self_register(void)
+static inline int c11threads_thrd_self_register_win32(void)
 {
 	return _c11threads_thrd_self_register_win32();
+}
+
+int _c11threads_thrd_register_win32(thrd_t thr);
+static inline int c11threads_thrd_register_win32(thrd_t thr)
+{
+	return _c11threads_thrd_register_win32(thr);
 }
 
 int _thrd_create_win32(thrd_t *thr, thrd_start_t func, void *arg);
@@ -379,21 +391,7 @@ static inline int timespec_get(struct timespec *ts, int base)
 
 #else /* !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) */
 
-/* ---- library ---- */
-
-static inline void c11threads_init(void)
-{
-}
-
-static inline void c11threads_destroy(void)
-{
-}
-
 /* ---- thread management ---- */
-
-static inline int c11threads_thrd_self_register(void)
-{
-}
 
 static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {

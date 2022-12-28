@@ -29,8 +29,8 @@ For non-pthread users on Windows:
 You need to compile c11threads_win32.c and link with it. Define
 "C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA" if you wish to support Windows all
 the way back to NT 4.0 by forgoing condition variables and "call_once()"
-support. Call "c11threads_init()" before using the library and
-"c11threads_destroy()" after you are done.
+support. Call "c11threads_init_win32()" before using the library and
+"c11threads_destroy_win32()" after you are done.
 
 If you'd like to use this with a C89 compiler, just search&replace or
 define-away all instances of "inline" to oblivion. Each object file will get a
