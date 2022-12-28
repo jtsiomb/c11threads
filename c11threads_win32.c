@@ -941,7 +941,7 @@ void call_once(once_flag *flag, void (*func)(void))
 
 	if (InterlockedCompareExchangePointerAcquire(&flag->ptr, (void*)1, (void*)0) == (void*)0) {
 		(func)();
-		InterlockedExchangePointer(flag->ptr, (void*)2);
+		InterlockedExchangePointer(&flag->ptr, (void*)2);
 	} else {
 		while (flag->ptr == (void*)1) {
 			sleep_time = C11THREADS_CALLONCE_POLL_INTERVAL / 100;
