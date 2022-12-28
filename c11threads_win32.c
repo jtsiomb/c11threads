@@ -467,10 +467,8 @@ int _c11threads_thrd_self_register_win32(void)
 
 int _c11threads_thrd_register_win32(thrd_t thr)
 {
-	void *process;
 	void *h;
 
-	process = GetCurrentProcess();
 	h = OpenThread(STANDARD_RIGHTS_REQUIRED, 0, thr);
 	if (!h) {
 		return thrd_error;
