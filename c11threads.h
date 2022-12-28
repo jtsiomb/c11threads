@@ -45,9 +45,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 #endif
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 #define ONCE_FLAG_INIT		{0}
-#endif
 #define TSS_DTOR_ITERATIONS	4
 #else
 #define ONCE_FLAG_INIT		PTHREAD_ONCE_INIT
@@ -74,9 +72,8 @@ Main project site: https://github.com/jtsiomb/c11threads
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
 
-#ifdef C11THREADS_NO_TIMED_MUTEX
-#define C11THREADS_TIMEDLOCK_POLL_INTERVAL 5000000	/* 5 ms */
-#endif
+#define C11THREADS_TIMEDLOCK_POLL_INTERVAL	5000000	/* 5 ms */
+#define C11THREADS_CALLONCE_POLL_INTERVAL	5000000	/* 5 ms */
 
 /* types */
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
@@ -89,17 +86,13 @@ typedef struct {
 	void *lock_semaphore;
 	void *spin_count;
 } mtx_t;
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 typedef struct {
 	void *ptr;
 } cnd_t;
-#endif
 typedef unsigned long tss_t;
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 typedef struct {
 	void *ptr;
 } once_flag;
-#endif
 #else
 typedef pthread_t thrd_t;
 typedef pthread_mutex_t mtx_t;
@@ -375,7 +368,13 @@ static inline void *tss_get(tss_t key)
 
 /* ---- misc ---- */
 
-#ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
+#ifdef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
+void _call_once_win32_legacy(once_flag *flag, void (*func)(void));
+static inline void call_once(once_flag *flag, void (*func)(void))
+{
+	_call_once_win32_legacy(flag, func);
+}
+#else
 void _call_once_win32(once_flag *flag, void (*func)(void));
 static inline void call_once(once_flag *flag, void (*func)(void))
 {

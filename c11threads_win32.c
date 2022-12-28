@@ -25,7 +25,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <malloc.h>
 #include <stddef.h>
 
-/* Condition variables and one-time callables need at least Windows Vista. */
+/* Condition variables need at least Windows Vista. */
 #ifdef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 #define WINVER 0x0400 /* Windows NT 4.0 */
 #define _WIN32_WINNT WINVER
@@ -34,7 +34,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <Windows.h>
 
 #if !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA) && _WIN32_WINNT < 0x0600 /* Windows Vista */
-#error c11threads: Cannot support condition variables and call once on Windows older than Vista; define C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA or C11THREADS_PTHREAD_WIN32 (use libpthread)
+#error c11threads: Cannot support condition variables on Windows older than Vista; define C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA or C11THREADS_PTHREAD_WIN32 (use libpthread)
 #endif
 
 
@@ -187,6 +187,92 @@ static void _c11threads_util_file_time_to_timespec_win32(
 	ts->tv_nsec = (file_time % 10000000ULL) * 100ULL;
 }
 
+static int _c11threads_util_sleep_win32(long long file_time_in, long long *file_time_out)
+{
+	void *timer;
+	unsigned long error;
+	LARGE_INTEGER due_time;
+	LARGE_INTEGER time_start;
+	unsigned long wait_status;
+	LARGE_INTEGER time_end;
+	unsigned long long time_result;
+
+	assert(file_time_in >= 0);
+
+	_c11threads_assert_initialized_win32();
+
+	timer = CreateWaitableTimerW(NULL, 1, NULL);
+	if (!timer) {
+		error = GetLastError();
+		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+	}
+
+	due_time.QuadPart = -file_time_in;
+	if (!SetWaitableTimer(timer, &due_time, 0, NULL, NULL, 0)) {
+		error = GetLastError();
+		CloseHandle(timer);
+		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+	}
+
+	if (file_time_out) {
+		if (!QueryPerformanceCounter(&time_start)) {
+			error = GetLastError();
+			CloseHandle(timer);
+			return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+		}
+
+		wait_status = WaitForMultipleObjectsEx(1, &timer, 0, INFINITE, 1);
+		if (wait_status == WAIT_OBJECT_0) {
+			CloseHandle(timer);
+			return 0; /* Success. */
+		}
+		if (wait_status == WAIT_IO_COMPLETION) {
+			CloseHandle(timer);
+
+			if (!QueryPerformanceCounter(&time_end)) {
+				error = GetLastError();
+				return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+			}
+
+			time_result = (unsigned long long)time_end.QuadPart - (unsigned long long)time_start.QuadPart;
+
+			/* Would overflow. */
+			if (time_result > (unsigned long long)-1 / 10000000ULL) {
+				time_result /= (unsigned long long)_c11threads_perf_freq_win32.QuadPart; /* Try dividing first. */
+
+				/* Inaccurate version would still overflow. */
+				if (time_result > (unsigned long long)-1 / 10000000ULL) {
+					*file_time_out = 0; /* Pretend remaining time is 0. */
+				} else {
+					*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL; /* Return inaccurate result. */
+				}
+			} else {
+				*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL / (unsigned long long)_c11threads_perf_freq_win32.QuadPart;
+			}
+
+			if (*file_time_out < 0) {
+				*file_time_out = 0;
+			}
+
+			return -1; /* APC queued. */
+		}
+		error = GetLastError();
+	} else {
+		wait_status = WaitForMultipleObjectsEx(1, &timer, 0, INFINITE, 1);
+		if (wait_status == WAIT_OBJECT_0) {
+			CloseHandle(timer);
+			return 0; /* Success. */
+		}
+		if (wait_status == WAIT_IO_COMPLETION) {
+			CloseHandle(timer);
+			return -1; /* APC queued. */
+		}
+		error = GetLastError();
+	}
+
+	return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+}
+
 /* ---- thread management ---- */
 
 static _Bool _thrd_register_win32(thrd_t thrd, HANDLE h)
@@ -285,90 +371,6 @@ static void _thrd_run_tss_dtors_win32(void)
 		}
 	}
 	LeaveCriticalSection(&_c11threads_tss_dtor_list_critical_section_win32);
-}
-
-static int _thrd_sleep_internal_win32(long long file_time_in, long long *file_time_out)
-{
-	void *timer;
-	unsigned long error;
-	LARGE_INTEGER due_time;
-	LARGE_INTEGER time_start;
-	unsigned long wait_status;
-	LARGE_INTEGER time_end;
-	unsigned long long time_result;
-
-	_c11threads_assert_initialized_win32();
-
-	timer = CreateWaitableTimerW(NULL, 1, NULL);
-	if (!timer) {
-		error = GetLastError();
-		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-	}
-
-	due_time.QuadPart = -file_time_in;
-	if (!SetWaitableTimer(timer, &due_time, 0, NULL, NULL, 0)) {
-		error = GetLastError();
-		CloseHandle(timer);
-		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-	}
-
-	if (file_time_out) {
-		if (!QueryPerformanceCounter(&time_start)) {
-			error = GetLastError();
-			CloseHandle(timer);
-			return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-		}
-
-		wait_status = WaitForMultipleObjectsEx(1, &timer, 0, INFINITE, 1);
-		if (wait_status == WAIT_OBJECT_0) {
-			CloseHandle(timer);
-			return 0; /* Success. */
-		}
-		if (wait_status == WAIT_IO_COMPLETION) {
-			CloseHandle(timer);
-
-			if (!QueryPerformanceCounter(&time_end)) {
-				error = GetLastError();
-				return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-			}
-
-			time_result = (unsigned long long)time_end.QuadPart - (unsigned long long)time_start.QuadPart;
-
-			/* Would overflow. */
-			if (time_result > (unsigned long long)-1 / 10000000ULL) {
-				time_result /= (unsigned long long)_c11threads_perf_freq_win32.QuadPart; /* Try dividing first. */
-
-				/* Inaccurate version would still overflow. */
-				if (time_result > (unsigned long long)-1 / 10000000ULL) {
-					*file_time_out = 0; /* Pretend remaining time is 0. */
-				} else {
-					*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL; /* Return inaccurate result. */
-				}
-			} else {
-				*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL / (unsigned long long)_c11threads_perf_freq_win32.QuadPart;
-			}
-
-			if (*file_time_out < 0) {
-				*file_time_out = 0;
-			}
-
-			return -1; /* APC queued. */
-		}
-		error = GetLastError();
-	} else {
-		wait_status = WaitForMultipleObjectsEx(1, &timer, 0, INFINITE, 1);
-		if (wait_status == WAIT_OBJECT_0) {
-			CloseHandle(timer);
-			return 0; /* Success. */
-		}
-		if (wait_status == WAIT_IO_COMPLETION) {
-			CloseHandle(timer);
-			return -1; /* APC queued. */
-		}
-		error = GetLastError();
-	}
-
-	return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
 }
 
 int _c11threads_thrd_self_register_win32(void)
@@ -526,7 +528,7 @@ int _thrd_sleep_win32(const struct timespec *ts_in, struct timespec *rem_out)
 #ifndef _USE_32BIT_TIME_T
 restart_sleep:
 #endif
-	res = _thrd_sleep_internal_win32(file_time, rem_out ? &file_time : NULL);
+	res = _c11threads_util_sleep_win32(file_time, rem_out ? &file_time : NULL);
 
 	if (res == -1 && rem_out) {
 		_c11threads_util_file_time_to_timespec_win32(
@@ -604,7 +606,7 @@ int _mtx_timedlock_win32(mtx_t *mtx, const struct timespec *ts)
 
 		sleep_time = C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100;
 		do {
-			sleep_res = _thrd_sleep_internal_win32(sleep_time, &sleep_time);
+			sleep_res = _c11threads_util_sleep_win32(sleep_time, &sleep_time);
 		} while (sleep_res == -1);
 		if (sleep_res < -1) {
 			return thrd_error;
@@ -772,6 +774,27 @@ void *_tss_get_win32(tss_t key)
 }
 
 /* ---- misc ---- */
+
+void _call_once_win32_legacy(once_flag *flag, void (*func)(void))
+{
+	long long sleep_time;
+	int sleep_res;
+
+	if (InterlockedCompareExchangePointerAcquire(&flag->ptr, (void*)1, (void*)0) == (void*)0) {
+		(func)();
+		InterlockedExchangePointer(flag->ptr, (void*)2);
+	} else {
+		while (flag->ptr == (void*)1) {
+			sleep_time = C11THREADS_CALLONCE_POLL_INTERVAL / 100;
+			do {
+				sleep_res = _c11threads_util_sleep_win32(sleep_time, &sleep_time);
+			} while (sleep_res == -1);
+			if (sleep_res < -1) {
+				SwitchToThread();
+			}
+		}
+	}
+}
 
 #ifndef C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA
 static int __stdcall _call_once_thunk_win32(INIT_ONCE *init_once, void (*func)(void), void **context)

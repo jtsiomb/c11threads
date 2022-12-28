@@ -15,13 +15,12 @@
 
 mtx_t mtx;
 mtx_t mtx2;
-tss_t tss;
-int flag;
-
 #if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 cnd_t cnd;
-once_flag once = ONCE_FLAG_INIT;
 #endif
+tss_t tss;
+once_flag once = ONCE_FLAG_INIT;
+int flag;
 
 #define CHK_THRD(a) assert_thrd_success(a, __FILE__, __LINE__, #a)
 #define NUM_THREADS 4
@@ -53,13 +52,9 @@ int main(void)
 	run_tss_test();
 	puts("stop thread-specific storage test\n");
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 	puts("start call once test");
 	run_call_once_test();
 	puts("stop call once test\n");
-#else
-	puts("skip call once test on win32 < vista\n");
-#endif
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 	c11threads_destroy_win32();
@@ -229,7 +224,6 @@ void run_tss_test(void)
 	tss_delete(tss);
 }
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_SUPPORT_WINNT_OLDER_THAN_VISTA)
 void my_call_once_func(void)
 {
 	puts("my_call_once_func() was called");
@@ -266,4 +260,3 @@ void run_call_once_test(void)
 		abort();
 	}
 }
-#endif
