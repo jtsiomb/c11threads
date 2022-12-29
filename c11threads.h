@@ -15,6 +15,13 @@ Main project site: https://github.com/jtsiomb/c11threads
 #ifndef C11THREADS_H_
 #define C11THREADS_H_
 
+/* If Windows version is already known, check whether condition variables are supported. */
+#ifdef _WIN32_WINNT
+#if _WIN32_WINNT < 0x0600 /* Windows Vista */
+#define C11THREADS_NO_COND_WIN32
+#endif
+#endif
+
 #if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32)
 #include <stdint.h>
 #include <errno.h>

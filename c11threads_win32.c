@@ -25,6 +25,10 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <malloc.h>
 #include <stddef.h>
 
+#ifdef C11THREADS_NO_COND_WIN32
+#define WINVER 0x0400 /* Windows NT 4.0 */
+#define _WIN32_WINNT WINVER
+#endif
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
