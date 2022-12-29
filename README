@@ -26,10 +26,10 @@ trying to use C11 threads, right?). Define "C11THREADS_PTHREAD_WIN32" if you are
 compiling for Win32.
 
 For non-pthread users on Windows:
-You need to compile c11threads_win32.c and link with it. Define
-"C11THREADS_NO_COND_WIN32" if you wish to support Windows all the way back to NT
-4.0 by forgoing condition variables. Call "c11threads_init_win32()" before using
-the library and "c11threads_destroy_win32()" after you are done.
+You need to compile c11threads_win32.c and link with it. Define WINVER and
+_WIN32_WINNT to 0x0400 for c11threads_win32.c if you need to support Windows
+versions prior to Windows Vista and all the way back to NT 4.0. Call
+"c11threads_destroy_win32()" after you are done using the library.
 
 If you'd like to use this with a C89 compiler, just search&replace or
 define-away all instances of "inline" to oblivion. Each object file will get a

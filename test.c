@@ -15,9 +15,7 @@
 
 mtx_t mtx;
 mtx_t mtx2;
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
 cnd_t cnd;
-#endif
 tss_t tss;
 once_flag once = ONCE_FLAG_INIT;
 int flag;
@@ -32,21 +30,13 @@ void run_call_once_test(void);
 
 int main(void)
 {
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	c11threads_init_win32();
-#endif
-
 	puts("start thread test");
 	run_thread_test();
 	puts("end thread test\n");
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
 	puts("start timed mutex test");
 	run_timed_mtx_test();
 	puts("stop timed mutex test\n");
-#else
-	puts("skip timed mutex test on win32 < vista\n");
-#endif
 
 	puts("start thread-specific storage test");
 	run_tss_test();
@@ -57,7 +47,7 @@ int main(void)
 	puts("stop call once test\n");
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	c11threads_destroy_win32();
+	c11threads_win32_destroy();
 #endif
 
 #ifdef _WIN32
@@ -120,7 +110,7 @@ void run_thread_test(void)
 	}
 }
 
-#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_NO_COND_WIN32)
+#if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_OLD_WIN32API)
 int hold_mutex_three_seconds(void* arg)
 {
 	(void)arg;
