@@ -46,7 +46,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 #if _MSC_VER < 1900
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
-#else
+#elif __STDC_VERSION__ < 201112L
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
 #elif defined(__APPLE__)
