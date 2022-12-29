@@ -458,15 +458,15 @@ int c11threads_thrd_self_register_win32(void)
 	return thrd_success;
 }
 
-int c11threads_thrd_register_win32(thrd_t thr)
+int c11threads_thrd_register_win32(unsigned long win32_thread_id)
 {
 	void *h;
 
-	h = OpenThread(STANDARD_RIGHTS_REQUIRED, 0, thr);
+	h = OpenThread(STANDARD_RIGHTS_REQUIRED, 0, win32_thread_id);
 	if (!h) {
 		return thrd_error;
 	}
-	if (!_thrd_register_win32(thr, h)) {
+	if (!_thrd_register_win32(win32_thread_id, h)) {
 		CloseHandle(h);
 		return thrd_nomem;
 	}

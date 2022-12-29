@@ -146,7 +146,7 @@ void c11threads_destroy_win32(void);
 /* Win32: Register current Win32 thread in c11threads to allow for proper thrd_join(). Memory leak if neither joined nor detached. */
 int c11threads_thrd_self_register_win32(void);
 /* Win32: Register other Win32 thread by ID in c11threads to allow for proper thrd_join(). Memory leak if neither joined nor detached. */
-int c11threads_thrd_register_win32(thrd_t thr);
+int c11threads_thrd_register_win32(unsigned long win32_thread_id);
 #endif
 C11THREADS_MAYBE_INLINE int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
 /* Win32: Threads not created with thrd_create() need to call this to clean up TSS. */
