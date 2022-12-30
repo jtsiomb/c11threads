@@ -887,9 +887,9 @@ int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wai
 	EnterCriticalSection(&cnd->critical_section);
 	++cnd->wait_count;
 	LeaveCriticalSection(&cnd->critical_section);
-
 	LeaveCriticalSection((PCRITICAL_SECTION)mtx);
-	wait_status = WaitForMultipleObjects(2, &cnd->signal_event, 0, wait_time);
+
+	wait_status = WaitForMultipleObjects(2, &cnd->signal_event /* and cnd->broadcast_event */, 0, wait_time);
 
 	EnterCriticalSection(&cnd->critical_section);
 	--cnd->wait_count;
@@ -903,6 +903,7 @@ int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wai
 			} while (cnd->wait_count);
 		}
 	} else {
+		ResetEvent(cnd->signal_event);
 		ResetEvent(cnd->broadcast_event);
 	}
 	LeaveCriticalSection(&cnd->critical_section);
