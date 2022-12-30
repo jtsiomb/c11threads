@@ -185,7 +185,7 @@ void run_timed_mtx_test(void)
 void my_tss_dtor(void *arg)
 {
 	printf("dtor: content of tss: %zu\n", (size_t)arg);
-	CHK_EXPECTED((size_t)arg, 42);
+	CHK_EXPECTED((int)(size_t)arg, 42);
 }
 
 int my_tss_thread_func(void *arg)
@@ -198,7 +198,7 @@ int my_tss_thread_func(void *arg)
 	CHK_THRD(tss_set(tss, (void*)42));
 	tss_content = tss_get(tss);
 	printf("thread func: initial content of tss: %zu\n", (size_t)tss_content);
-	CHK_EXPECTED((size_t)tss_content, 42);
+	CHK_EXPECTED((int)(size_t)tss_content, 42);
 	return 0;
 }
 
