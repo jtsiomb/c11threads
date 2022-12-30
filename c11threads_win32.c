@@ -846,8 +846,18 @@ void cnd_destroy(cnd_t *cond)
 int cnd_signal(cnd_t *cond)
 {
 	struct _c11threads_win32_cnd_t *cnd;
+	int success;
+
 	cnd = cond->ptr;
-	return PulseEvent(cnd->signal_event) ? thrd_success : thrd_error;
+	success = 1;
+
+	EnterCriticalSection(&cnd->critical_section);
+	if (cnd->wait_count) {
+		success = SetEvent(cnd->signal_event);
+	}
+	LeaveCriticalSection(&cnd->critical_section);
+
+	return success ? thrd_success : thrd_error;
 }
 
 int cnd_broadcast(cnd_t *cond)
@@ -871,40 +881,42 @@ int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wai
 {
 	struct _c11threads_win32_cnd_t *cnd;
 	unsigned long wait_status;
+	int res;
 
 	cnd = cond->ptr;
 
 	EnterCriticalSection(&cnd->critical_section);
-	if (cnd->wait_count == (size_t)-1) {
-		LeaveCriticalSection(&cnd->critical_section);
-		return thrd_error;
-	}
 	++cnd->wait_count;
 	LeaveCriticalSection(&cnd->critical_section);
 
 	LeaveCriticalSection((PCRITICAL_SECTION)mtx);
-	void *events[] = { cnd->signal_event, cnd->broadcast_event };
-	wait_status = WaitForMultipleObjects(2, events, 0, wait_time);
-	EnterCriticalSection((PCRITICAL_SECTION)mtx);
+	wait_status = WaitForMultipleObjects(2, &cnd->signal_event, 0, wait_time);
 
 	EnterCriticalSection(&cnd->critical_section);
 	--cnd->wait_count;
-	if (!cnd->wait_count) {
-		if (!ResetEvent(cnd->broadcast_event)) {
-			LeaveCriticalSection(&cnd->critical_section);
-			return thrd_error;
+	if (cnd->wait_count) {
+		if (wait_status == WAIT_OBJECT_0 + 1 /* broadcast_event */) {
+			/* Wait for the other threads to unblock. */
+			do {
+				LeaveCriticalSection(&cnd->critical_section);
+				Sleep(0);
+				EnterCriticalSection(&cnd->critical_section);
+			} while (cnd->wait_count);
 		}
+	} else {
+		ResetEvent(cnd->broadcast_event);
 	}
 	LeaveCriticalSection(&cnd->critical_section);
 
+	res = thrd_success;
 	if (wait_status == WAIT_FAILED) {
-		return thrd_error;
-	}
-	if (wait_status == WAIT_TIMEOUT && !clamped) {
-		return thrd_timedout;
+		res = thrd_error;
+	} else if (!clamped && wait_status == WAIT_TIMEOUT) {
+		res = thrd_timedout;
 	}
 
-	return thrd_success;
+	EnterCriticalSection((PCRITICAL_SECTION)mtx);
+	return res;
 }
 
 int cnd_wait(cnd_t *cond, mtx_t *mtx)
