@@ -91,7 +91,10 @@ int tfunc(void *arg)
 
 	dur.tv_sec = 4;
 	dur.tv_nsec = 0;
-	CHK_THRD(thrd_sleep(&dur, NULL));
+	if (thrd_sleep(&dur, NULL)) {
+		fprintf(stderr, "%s:%u: thrd_sleep() failed\n", __FILE__, __LINE__);
+		abort();
+	}
 
 	printf("thread %zu done\n", num);
 	return 0;

@@ -158,21 +158,6 @@ static long long _c11threads_win32_util_timespec64_to_file_time(const struct _c1
 	return res;
 }
 
-/* Precondition: 'file_time' accumulated with 'periods' does not overflow. */
-static void _c11threads_win32_util_file_time_to_timespec32(unsigned long long file_time, struct _c11threads_win32_timespec32_t *ts)
-{
-	ts->tv_sec = (long)(file_time / 10000000ULL);
-	ts->tv_nsec = (file_time % 10000000ULL) * 100ULL;
-}
-
-/* Precondition: 'file_time' accumulated with 'periods' does not overflow. */
-static void _c11threads_win32_util_file_time_to_timespec64(unsigned long long file_time, unsigned long long periods, struct _c11threads_win32_timespec64_t *ts)
-{
-	ts->tv_sec = file_time / 10000000ULL;
-	ts->tv_sec += periods * 922337203685ULL;
-	ts->tv_nsec = (file_time % 10000000ULL) * 100ULL;
-}
-
 /* Precondition: 'ts' validated. */
 static _Bool _c11threads_win32_util_timespec32_to_milliseconds(const struct _c11threads_win32_timespec32_t *ts, unsigned long *ms)
 {
@@ -327,16 +312,11 @@ int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, 
 }
 #endif
 
-static int _c11threads_win32_util_sleep(long long file_time_in, long long *file_time_out)
+static int _c11threads_win32_util_sleep(long long file_time_in)
 {
 	void *timer;
 	unsigned long error;
 	LARGE_INTEGER due_time;
-	LARGE_INTEGER time_start;
-	unsigned long wait_status;
-	LARGE_INTEGER perf_freq;
-	LARGE_INTEGER time_end;
-	unsigned long long time_result;
 
 	assert(file_time_in >= 0);
 
@@ -353,68 +333,14 @@ static int _c11threads_win32_util_sleep(long long file_time_in, long long *file_
 		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
 	}
 
-	if (file_time_out) {
-		if (!QueryPerformanceCounter(&time_start)) {
-			error = GetLastError();
-			CloseHandle(timer);
-			return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-		}
-
-		wait_status = WaitForMultipleObjectsEx(1, &timer, 0, INFINITE, 1);
-		if (wait_status == WAIT_OBJECT_0) {
-			CloseHandle(timer);
-			return 0; /* Success. */
-		}
-		if (wait_status == WAIT_IO_COMPLETION) {
-			CloseHandle(timer);
-
-			if (!QueryPerformanceFrequency(&perf_freq)) {
-				error = GetLastError();
-				return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-			}
-
-			if (!QueryPerformanceCounter(&time_end)) {
-				error = GetLastError();
-				return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-			}
-
-			time_result = (unsigned long long)time_end.QuadPart - (unsigned long long)time_start.QuadPart;
-
-			/* Would overflow. */
-			if (time_result > (unsigned long long)-1 / 10000000ULL) {
-				time_result /= (unsigned long long)perf_freq.QuadPart; /* Try dividing first. */
-
-				/* Inaccurate version would still overflow. */
-				if (time_result > (unsigned long long)-1 / 10000000ULL) {
-					*file_time_out = 0; /* Pretend remaining time is 0. */
-				} else {
-					*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL; /* Return inaccurate result. */
-				}
-			} else {
-				*file_time_out = (unsigned long long)file_time_in - time_result * 10000000ULL / (unsigned long long)perf_freq.QuadPart;
-			}
-
-			if (*file_time_out < 0) {
-				*file_time_out = 0;
-			}
-
-			return -1; /* APC queued. */
-		}
+	if (WaitForSingleObject(timer, INFINITE) == WAIT_FAILED) {
 		error = GetLastError();
-	} else {
-		wait_status = WaitForMultipleObjectsEx(1, &timer, 0, INFINITE, 1);
-		if (wait_status == WAIT_OBJECT_0) {
-			CloseHandle(timer);
-			return 0; /* Success. */
-		}
-		if (wait_status == WAIT_IO_COMPLETION) {
-			CloseHandle(timer);
-			return -1; /* APC queued. */
-		}
-		error = GetLastError();
+		CloseHandle(timer);
+		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
 	}
 
-	return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+	CloseHandle(timer);
+	return 0; /* Success. */
 }
 
 /* ---- thread management ---- */
@@ -615,17 +541,12 @@ int thrd_join(thrd_t thr, int *res)
 {
 	int ret;
 	void *h;
-	unsigned long wait_status;
 
-	ret = thrd_error;
+	ret = thrd_success;
 	h = OpenThread(SYNCHRONIZE | THREAD_QUERY_INFORMATION, 0, thr);
 	if (h) {
-		do {
-			wait_status = WaitForMultipleObjectsEx(1, &h, 0, INFINITE, 1);
-		} while (wait_status == WAIT_IO_COMPLETION);
-
-		if (wait_status == WAIT_OBJECT_0 && (!res || GetExitCodeThread(h, (unsigned long*)res))) {
-			ret = thrd_success;
+		if (WaitForSingleObject(h, INFINITE) == WAIT_FAILED || (res && !GetExitCodeThread(h, (unsigned long*)res))) {
+			ret = thrd_error;
 		}
 
 		CloseHandle(h);
@@ -650,6 +571,8 @@ int _c11threads_win32_thrd_sleep32(const struct _c11threads_win32_timespec32_t *
 	int res;
 	long long file_time;
 
+	(void)rem_out;
+
 	if (!_c11threads_win32_util_is_timespec32_valid(ts_in)) {
 		return -ERROR_INVALID_PARAMETER;
 	}
@@ -659,11 +582,7 @@ int _c11threads_win32_thrd_sleep32(const struct _c11threads_win32_timespec32_t *
 		return -ERROR_INVALID_PARAMETER;
 	}
 
-	res = _c11threads_win32_util_sleep(file_time, rem_out ? &file_time : NULL);
-
-	if (res == -1 && rem_out) {
-		_c11threads_win32_util_file_time_to_timespec32(file_time, rem_out);
-	}
+	res = _c11threads_win32_util_sleep(file_time);
 
 	return res;
 }
@@ -673,6 +592,8 @@ int _c11threads_win32_thrd_sleep64(const struct _c11threads_win32_timespec64_t *
 	int res;
 	long long file_time;
 	size_t periods;
+
+	(void)rem_out;
 
 	if (!_c11threads_win32_util_is_timespec64_valid(ts_in)) {
 		return -ERROR_INVALID_PARAMETER;
@@ -684,11 +605,7 @@ int _c11threads_win32_thrd_sleep64(const struct _c11threads_win32_timespec64_t *
 	}
 
 restart_sleep:
-	res = _c11threads_win32_util_sleep(file_time, rem_out ? &file_time : NULL);
-
-	if (res == -1 && rem_out) {
-		_c11threads_win32_util_file_time_to_timespec64(file_time, periods, rem_out);
-	}
+	res = _c11threads_win32_util_sleep(file_time);
 
 	if (!res && periods) {
 		--periods;
@@ -736,8 +653,6 @@ int _c11threads_win32_mtx_timedlock32(mtx_t *mtx, const struct _c11threads_win32
 {
 	int success;
 	struct _c11threads_win32_timespec32_t ts_current;
-	long long sleep_time;
-	int sleep_res;
 
 	if (!_c11threads_win32_util_is_timespec32_valid(ts)) {
 		return thrd_error;
@@ -748,15 +663,12 @@ int _c11threads_win32_mtx_timedlock32(mtx_t *mtx, const struct _c11threads_win32
 		if (!_c11threads_win32_timespec32_get(&ts_current, TIME_UTC)) {
 			return thrd_error;
 		}
+
 		if (ts_current.tv_sec > ts->tv_sec || (ts_current.tv_sec == ts->tv_sec && ts_current.tv_nsec >= ts->tv_nsec)) {
 			return thrd_timedout;
 		}
 
-		sleep_time = C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100;
-		do {
-			sleep_res = _c11threads_win32_util_sleep(sleep_time, &sleep_time);
-		} while (sleep_res == -1);
-		if (sleep_res < -1) {
+		if (_c11threads_win32_util_sleep(C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100)) {
 			return thrd_error;
 		}
 
@@ -770,8 +682,6 @@ int _c11threads_win32_mtx_timedlock64(mtx_t *mtx, const struct _c11threads_win32
 {
 	int success;
 	struct _c11threads_win32_timespec64_t ts_current;
-	long long sleep_time;
-	int sleep_res;
 
 	if (!_c11threads_win32_util_is_timespec64_valid(ts)) {
 		return thrd_error;
@@ -782,15 +692,12 @@ int _c11threads_win32_mtx_timedlock64(mtx_t *mtx, const struct _c11threads_win32
 		if (!_c11threads_win32_timespec64_get(&ts_current, TIME_UTC)) {
 			return thrd_error;
 		}
+
 		if (ts_current.tv_sec > ts->tv_sec || (ts_current.tv_sec == ts->tv_sec && ts_current.tv_nsec >= ts->tv_nsec)) {
 			return thrd_timedout;
 		}
 
-		sleep_time = C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100;
-		do {
-			sleep_res = _c11threads_win32_util_sleep(sleep_time, &sleep_time);
-		} while (sleep_res == -1);
-		if (sleep_res < -1) {
+		if (_c11threads_win32_util_sleep(C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100)) {
 			return thrd_error;
 		}
 
@@ -841,7 +748,9 @@ int _c11threads_win32_cnd_timedwait_common(cnd_t *cond, mtx_t *mtx, unsigned lon
 {
 	if (SleepConditionVariableCS((PCONDITION_VARIABLE)cond, (PCRITICAL_SECTION)mtx, wait_time)) {
 		return thrd_success;
-	} else if (GetLastError() == ERROR_TIMEOUT) {
+	}
+
+	if (GetLastError() == ERROR_TIMEOUT) {
 		return clamped ? thrd_success : thrd_timedout;
 	}
 
@@ -975,7 +884,7 @@ int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wai
 
 	LeaveCriticalSection((PCRITICAL_SECTION)mtx);
 	void *events[] = { cnd->signal_event, cnd->broadcast_event };
-	wait_status = WaitForMultipleObjectsEx(2, events, 0, wait_time, 1);
+	wait_status = WaitForMultipleObjects(2, events, 0, wait_time);
 	EnterCriticalSection((PCRITICAL_SECTION)mtx);
 
 	EnterCriticalSection(&cnd->critical_section);
@@ -1138,19 +1047,12 @@ void call_once(once_flag *flag, void (*func)(void))
 #else
 void call_once(once_flag *flag, void (*func)(void))
 {
-	long long sleep_time;
-	int sleep_res;
-
 	if (InterlockedCompareExchangePointerAcquire(&flag->ptr, (void*)1, (void*)0) == (void*)0) {
 		(func)();
 		InterlockedExchangePointer(&flag->ptr, (void*)2);
 	} else {
 		while (flag->ptr == (void*)1) {
-			sleep_time = C11THREADS_CALLONCE_POLL_INTERVAL / 100;
-			do {
-				sleep_res = _c11threads_win32_util_sleep(sleep_time, &sleep_time);
-			} while (sleep_res == -1);
-			if (sleep_res < -1) {
+			if (_c11threads_win32_util_sleep(C11THREADS_CALLONCE_POLL_INTERVAL / 100)) {
 				SwitchToThread();
 			}
 		}
