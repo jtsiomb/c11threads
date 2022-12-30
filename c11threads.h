@@ -40,18 +40,14 @@ Main project site: https://github.com/jtsiomb/c11threads
 #define TSS_DTOR_ITERATIONS	PTHREAD_DESTRUCTOR_ITERATIONS
 #endif
 
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-#define C11THREADS_NO_TIMED_MUTEX
 #ifdef _MSC_VER
 #if _MSC_VER < 1900
-#define C11THREADS_NO_TIMESPEC_GET
-#endif
-#elif __STDC_VERSION__ < 201112L
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
 #elif defined(__APPLE__)
 /* Darwin doesn't implement timed mutexes currently */
 #define C11THREADS_NO_TIMED_MUTEX
+#define C11THREADS_TIMEDLOCK_POLL_INTERVAL	5000000	/* 5 ms */
 #include <Availability.h>
 #ifndef __MAC_10_15
 #define C11THREADS_NO_TIMESPEC_GET
@@ -59,9 +55,6 @@ Main project site: https://github.com/jtsiomb/c11threads
 #elif __STDC_VERSION__ < 201112L
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
-
-#define C11THREADS_TIMEDLOCK_POLL_INTERVAL	5000000	/* 5 ms */
-#define C11THREADS_CALLONCE_POLL_INTERVAL	5000000	/* 5 ms */
 
 #ifdef __cplusplus
 extern "C" {
@@ -78,13 +71,9 @@ typedef struct {
 	void *lock_semaphore;
 	void *spin_count;
 } mtx_t;
-typedef union {
-	void *ptr;
-} cnd_t;
+typedef void *cnd_t;
 typedef unsigned long tss_t;
-typedef struct {
-	void *ptr;
-} once_flag;
+typedef void *once_flag;
 struct _c11threads_win32_timespec32_t {
 	long tv_sec;
 	long tv_nsec;

@@ -75,7 +75,7 @@ void c11threads_win32_destroy(void)
 	struct _c11threads_win32_thrd_entry_t *thrd_entry;
 	struct _c11threads_win32_thrd_entry_t *thrd_entry_temp;
 
-	if (_c11threads_win32_initialized.ptr) {
+	if (_c11threads_win32_initialized) {
 		assert(!_c11threads_win32_tss_dtor_list);
 		tss_dtor_entry = _c11threads_win32_tss_dtor_list;
 		while (tss_dtor_entry) {
@@ -95,7 +95,7 @@ void c11threads_win32_destroy(void)
 
 		_c11threads_win32_tss_dtor_list = NULL;
 		_c11threads_win32_thrd_list = NULL;
-		_c11threads_win32_initialized.ptr = NULL;
+		_c11threads_win32_initialized = (void*)0;
 
 		DeleteCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 		DeleteCriticalSection(&_c11threads_win32_thrd_list_critical_section);
@@ -311,37 +311,6 @@ int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, 
 	return _timespec64_get((struct _timespec64*)ts, base);
 }
 #endif
-
-static int _c11threads_win32_util_sleep(long long file_time_in)
-{
-	void *timer;
-	unsigned long error;
-	LARGE_INTEGER due_time;
-
-	assert(file_time_in >= 0);
-
-	timer = CreateWaitableTimerW(NULL, 1, NULL);
-	if (!timer) {
-		error = GetLastError();
-		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-	}
-
-	due_time.QuadPart = -file_time_in;
-	if (!SetWaitableTimer(timer, &due_time, 0, NULL, NULL, 0)) {
-		error = GetLastError();
-		CloseHandle(timer);
-		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-	}
-
-	if (WaitForSingleObject(timer, INFINITE) == WAIT_FAILED) {
-		error = GetLastError();
-		CloseHandle(timer);
-		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
-	}
-
-	CloseHandle(timer);
-	return 0; /* Success. */
-}
 
 /* ---- thread management ---- */
 
@@ -565,10 +534,41 @@ thrd_t thrd_current(void)
 	return GetCurrentThreadId();
 }
 
+static int _c11threads_win32_sleep_common(long long file_time_in)
+{
+	void *timer;
+	unsigned long error;
+	LARGE_INTEGER due_time;
+
+	assert(file_time_in >= 0);
+
+	timer = CreateWaitableTimerW(NULL, 1, NULL);
+	if (!timer) {
+		error = GetLastError();
+		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+	}
+
+	due_time.QuadPart = -file_time_in;
+	if (!SetWaitableTimer(timer, &due_time, 0, NULL, NULL, 0)) {
+		error = GetLastError();
+		CloseHandle(timer);
+		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+	}
+
+	if (WaitForSingleObject(timer, INFINITE) == WAIT_FAILED) {
+		error = GetLastError();
+		CloseHandle(timer);
+		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
+	}
+
+	CloseHandle(timer);
+	return 0; /* Success. */
+}
+
 int _c11threads_win32_thrd_sleep32(const struct _c11threads_win32_timespec32_t *ts_in, struct _c11threads_win32_timespec32_t *rem_out)
 {
-	int res;
 	long long file_time;
+	int res;
 
 	(void)rem_out;
 
@@ -581,16 +581,16 @@ int _c11threads_win32_thrd_sleep32(const struct _c11threads_win32_timespec32_t *
 		return -ERROR_INVALID_PARAMETER;
 	}
 
-	res = _c11threads_win32_util_sleep(file_time);
+	res = _c11threads_win32_sleep_common(file_time);
 
 	return res;
 }
 
 int _c11threads_win32_thrd_sleep64(const struct _c11threads_win32_timespec64_t *ts_in, struct _c11threads_win32_timespec64_t *rem_out)
 {
-	int res;
 	long long file_time;
 	size_t periods;
+	int res;
 
 	(void)rem_out;
 
@@ -604,7 +604,7 @@ int _c11threads_win32_thrd_sleep64(const struct _c11threads_win32_timespec64_t *
 	}
 
 restart_sleep:
-	res = _c11threads_win32_util_sleep(file_time);
+	res = _c11threads_win32_sleep_common(file_time);
 
 	if (!res && periods) {
 		--periods;
@@ -667,9 +667,7 @@ int _c11threads_win32_mtx_timedlock32(mtx_t *mtx, const struct _c11threads_win32
 			return thrd_timedout;
 		}
 
-		if (_c11threads_win32_util_sleep(C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100)) {
-			return thrd_error;
-		}
+		Sleep(0);
 
 		success = TryEnterCriticalSection((PCRITICAL_SECTION)mtx);
 	}
@@ -696,9 +694,7 @@ int _c11threads_win32_mtx_timedlock64(mtx_t *mtx, const struct _c11threads_win32
 			return thrd_timedout;
 		}
 
-		if (_c11threads_win32_util_sleep(C11THREADS_TIMEDLOCK_POLL_INTERVAL / 100)) {
-			return thrd_error;
-		}
+		Sleep(0);
 
 		success = TryEnterCriticalSection((PCRITICAL_SECTION)mtx);
 	}
@@ -820,7 +816,7 @@ int cnd_init(cnd_t *cond)
 		cnd->broadcast_event = CreateEventW(NULL, 1, 0, NULL);
 		if (cnd->broadcast_event) {
 			cnd->wait_count = 0;
-			cond->ptr = cnd;
+			*cond = cnd;
 			return thrd_success;
 		}
 		CloseHandle(cnd->signal_event);
@@ -834,7 +830,7 @@ int cnd_init(cnd_t *cond)
 void cnd_destroy(cnd_t *cond)
 {
 	struct _c11threads_win32_cnd_t *cnd;
-	cnd = cond->ptr;
+	cnd = *cond;
 	assert(!cnd->wait_count);
 	CloseHandle(cnd->broadcast_event);
 	CloseHandle(cnd->signal_event);
@@ -847,7 +843,7 @@ int cnd_signal(cnd_t *cond)
 	struct _c11threads_win32_cnd_t *cnd;
 	int success;
 
-	cnd = cond->ptr;
+	cnd = *cond;
 	success = 1;
 
 	EnterCriticalSection(&cnd->critical_section);
@@ -864,7 +860,7 @@ int cnd_broadcast(cnd_t *cond)
 	struct _c11threads_win32_cnd_t *cnd;
 	int success;
 
-	cnd = cond->ptr;
+	cnd = *cond;
 	success = 1;
 
 	EnterCriticalSection(&cnd->critical_section);
@@ -882,7 +878,7 @@ int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wai
 	unsigned long wait_status;
 	int res;
 
-	cnd = cond->ptr;
+	cnd = *cond;
 
 	EnterCriticalSection(&cnd->critical_section);
 	++cnd->wait_count;
@@ -1059,14 +1055,12 @@ void call_once(once_flag *flag, void (*func)(void))
 #else
 void call_once(once_flag *flag, void (*func)(void))
 {
-	if (InterlockedCompareExchangePointerAcquire(&flag->ptr, (void*)1, (void*)0) == (void*)0) {
+	if (InterlockedCompareExchangePointerAcquire(flag, (void*)1, (void*)0) == (void*)0) {
 		(func)();
-		InterlockedExchangePointer(&flag->ptr, (void*)2);
+		InterlockedExchangePointer(flag, (void*)2);
 	} else {
-		while (flag->ptr == (void*)1) {
-			if (_c11threads_win32_util_sleep(C11THREADS_CALLONCE_POLL_INTERVAL / 100)) {
-				Sleep(0);
-			}
+		while (*flag == (void*)1) {
+			Sleep(0);
 		}
 	}
 }
