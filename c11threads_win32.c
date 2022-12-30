@@ -1065,7 +1065,7 @@ void call_once(once_flag *flag, void (*func)(void))
 	} else {
 		while (flag->ptr == (void*)1) {
 			if (_c11threads_win32_util_sleep(C11THREADS_CALLONCE_POLL_INTERVAL / 100)) {
-				SwitchToThread();
+				Sleep(0);
 			}
 		}
 	}
