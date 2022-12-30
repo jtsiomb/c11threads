@@ -511,9 +511,7 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 	if (h) {
 		if (_c11threads_win32_thrd_register(thrd, h)) {
 			if (ResumeThread(h) != (unsigned long)-1) {
-				if (thr) {
-					*thr = thrd;
-				}
+				*thr = thrd;
 				return thrd_success;
 			}
 			error = GetLastError();
@@ -521,6 +519,7 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 		} else {
 			error = ERROR_NOT_ENOUGH_MEMORY;
 		}
+
 		TerminateThread(h, 0);
 		CloseHandle(h);
 	} else {
