@@ -128,7 +128,10 @@ int hold_mutex_three_seconds(void* arg)
 
 	dur.tv_sec = 3;
 	dur.tv_nsec = 0;
-	CHK_THRD(thrd_sleep(&dur, NULL));
+	if (thrd_sleep(&dur, NULL)) {
+		fprintf(stderr, "%s:%u: thrd_sleep() failed\n", __FILE__, __LINE__);
+		abort();
+	}
 
 	CHK_THRD(mtx_unlock(&mtx));
 
@@ -171,7 +174,10 @@ void run_timed_mtx_test(void)
 
 	dur.tv_sec = 4;
 	dur.tv_nsec = 0;
-	CHK_THRD(thrd_sleep(&dur, NULL));
+	if (thrd_sleep(&dur, NULL)) {
+		fprintf(stderr, "%s:%u: thrd_sleep() failed\n", __FILE__, __LINE__);
+		abort();
+	}
 
 	CHK_THRD(mtx_timedlock(&mtx, &ts));
 	puts("thread no longer has mutex & we grabbed it");
