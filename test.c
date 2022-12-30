@@ -20,7 +20,9 @@ tss_t tss;
 once_flag once = ONCE_FLAG_INIT;
 int flag;
 
-#define CHK_THRD(a) assert_thrd_success(a, __FILE__, __LINE__, #a)
+#define CHK_THRD_EXPECTED(a, b) assert_thrd_expected(a, b, __FILE__, __LINE__, #a, #b)
+#define CHK_THRD(a) CHK_THRD_EXPECTED(a, thrd_success)
+#define CHK_EXPECTED(a, b) assert_expected(a, b, __FILE__, __LINE__, #a, #b)
 #define NUM_THREADS 4
 
 void run_thread_test(void);
@@ -36,15 +38,15 @@ int main(void)
 
 	puts("start timed mutex test");
 	run_timed_mtx_test();
-	puts("stop timed mutex test\n");
+	puts("end timed mutex test\n");
 
 	puts("start thread-specific storage test");
 	run_tss_test();
-	puts("stop thread-specific storage test\n");
+	puts("end thread-specific storage test\n");
 
 	puts("start call once test");
 	run_call_once_test();
-	puts("stop call once test\n");
+	puts("end call once test\n");
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 	c11threads_win32_destroy();
@@ -59,25 +61,35 @@ int main(void)
 	puts("tests finished");
 }
 
-void assert_thrd_success(int thrd_status, const char *file, unsigned int line, const char *func)
+void assert_thrd_expected(int thrd_status, int expected, const char *file, unsigned int line, const char *expr, const char *expected_str)
 {
-	const char *result;
+	const char *thrd_status_str;
 
-	if (thrd_status != thrd_success) {
+	if (thrd_status != expected) {
 		fflush(stdout);
 
 		switch (thrd_status)
 		{
-		case thrd_timedout:	result = "thrd_timedout"; break;
-		case thrd_busy:		result = "thrd_busy"; break;
-		case thrd_error:	result = "thrd_error"; break;
-		case thrd_nomem:	result = "thrd_nomem"; break;
+		case thrd_success:	thrd_status_str = "thrd_success"; break;
+		case thrd_timedout:	thrd_status_str = "thrd_timedout"; break;
+		case thrd_busy:		thrd_status_str = "thrd_busy"; break;
+		case thrd_error:	thrd_status_str = "thrd_error"; break;
+		case thrd_nomem:	thrd_status_str = "thrd_nomem"; break;
 		default:
-			fprintf(stderr, "%s:%u: %s: thrd status = %d\n", file, line, func, thrd_status);
+			fprintf(stderr, "%s:%u: %s: error %d, expected %s\n", file, line, expr, thrd_status, expected_str);
 			abort();
 		}
 
-		fprintf(stderr, "%s:%u: %s: %s\n", file, line, func, result);
+		fprintf(stderr, "%s:%u: %s: error %s, expected %s\n", file, line, expr, thrd_status_str, expected_str);
+		abort();
+	}
+}
+
+void assert_expected(int res, int expected, const char *file, unsigned int line, const char *expr, const char *expected_str)
+{
+	if (res != expected) {
+		fflush(stdout);
+		fprintf(stderr, "%s:%u: %s: error %d, expected %s\n", file, line, expr, res, expected_str);
 		abort();
 	}
 }
@@ -91,10 +103,7 @@ int tfunc(void *arg)
 
 	dur.tv_sec = 4;
 	dur.tv_nsec = 0;
-	if (thrd_sleep(&dur, NULL)) {
-		fprintf(stderr, "%s:%u: thrd_sleep() failed\n", __FILE__, __LINE__);
-		abort();
-	}
+	CHK_EXPECTED(thrd_sleep(&dur, NULL), 0);
 
 	printf("thread %zu done\n", num);
 	return 0;
@@ -128,10 +137,7 @@ int hold_mutex_three_seconds(void* arg)
 
 	dur.tv_sec = 3;
 	dur.tv_nsec = 0;
-	if (thrd_sleep(&dur, NULL)) {
-		fprintf(stderr, "%s:%u: thrd_sleep() failed\n", __FILE__, __LINE__);
-		abort();
-	}
+	CHK_EXPECTED(thrd_sleep(&dur, NULL), 0);
 
 	CHK_THRD(mtx_unlock(&mtx));
 
@@ -143,7 +149,6 @@ void run_timed_mtx_test(void)
 	thrd_t thread;
 	struct timespec ts;
 	struct timespec dur;
-	int thrd_status;
 
 	CHK_THRD(mtx_init(&mtx, mtx_timed));
 	CHK_THRD(mtx_init(&mtx2, mtx_plain));
@@ -160,24 +165,14 @@ void run_timed_mtx_test(void)
 	cnd_destroy(&cnd);
 	mtx_destroy(&mtx2);
 
-	if (!timespec_get(&ts, TIME_UTC)) {
-		fprintf(stderr, "%s:%u: timespec_get() failed\n", __FILE__, __LINE__);
-		abort();
-	}
+	CHK_EXPECTED(timespec_get(&ts, TIME_UTC), TIME_UTC);
 	ts.tv_sec = ts.tv_sec + 2;
-	if ((thrd_status = mtx_timedlock(&mtx,&ts)) == thrd_timedout) {
-		puts("thread has locked mutex & we timed out waiting for it");
-	} else {
-		fprintf(stderr, "%s:%u: expected to time out, but received result %d\n", __FILE__, __LINE__, thrd_status);
-		abort();
-	}
+	CHK_THRD_EXPECTED(mtx_timedlock(&mtx, &ts), thrd_timedout);
+	puts("thread has locked mutex & we timed out waiting for it");
 
 	dur.tv_sec = 4;
 	dur.tv_nsec = 0;
-	if (thrd_sleep(&dur, NULL)) {
-		fprintf(stderr, "%s:%u: thrd_sleep() failed\n", __FILE__, __LINE__);
-		abort();
-	}
+	CHK_EXPECTED(thrd_sleep(&dur, NULL), 0);
 
 	CHK_THRD(mtx_timedlock(&mtx, &ts));
 	puts("thread no longer has mutex & we grabbed it");
@@ -190,10 +185,7 @@ void run_timed_mtx_test(void)
 void my_tss_dtor(void *arg)
 {
 	printf("dtor: content of tss: %zu\n", (size_t)arg);
-	if ((size_t)arg != 42) {
-		fprintf(stderr, "%s:%u: wrong tss content: %zu\n", __FILE__, __LINE__, (size_t)arg);
-		abort();
-	}
+	CHK_EXPECTED((size_t)arg, 42);
 }
 
 int my_tss_thread_func(void *arg)
@@ -206,10 +198,7 @@ int my_tss_thread_func(void *arg)
 	CHK_THRD(tss_set(tss, (void*)42));
 	tss_content = tss_get(tss);
 	printf("thread func: initial content of tss: %zu\n", (size_t)tss_content);
-	if ((size_t)tss_content != 42) {
-		fprintf(stderr, "%s:%u: wrong tss content: %zu\n", __FILE__, __LINE__, (size_t)tss_content);
-		abort();
-	}
+	CHK_EXPECTED((size_t)tss_content, 42);
 	return 0;
 }
 
@@ -254,8 +243,5 @@ void run_call_once_test(void)
 
 	printf("content of flag: %d\n", flag);
 
-	if (flag != 1) {
-		fprintf(stderr, "%s:%u: wrong flag content: %d\n", __FILE__, __LINE__, flag);
-		abort();
-	}
+	CHK_EXPECTED(flag, 1);
 }
