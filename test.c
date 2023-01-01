@@ -107,7 +107,7 @@ int tfunc(void *arg)
 
 	printf("hello from thread %zu\n", num);
 
-	dur.tv_sec = 4;
+	dur.tv_sec = 1;
 	dur.tv_nsec = 0;
 	CHK_EXPECTED(thrd_sleep(&dur, NULL), 0);
 
@@ -129,7 +129,7 @@ void run_thread_test(void)
 }
 
 #if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_OLD_WIN32API)
-int hold_mutex_three_seconds(void* arg)
+int hold_mutex_for_one_second(void* arg)
 {
 	(void)arg;
 	struct timespec dur;
@@ -141,7 +141,7 @@ int hold_mutex_three_seconds(void* arg)
 	CHK_THRD(cnd_signal(&cnd));
 	CHK_THRD(mtx_unlock(&mtx2));
 
-	dur.tv_sec = 3;
+	dur.tv_sec = 1;
 	dur.tv_nsec = 0;
 	CHK_EXPECTED(thrd_sleep(&dur, NULL), 0);
 
@@ -161,7 +161,7 @@ void run_timed_mtx_test(void)
 	CHK_THRD(cnd_init(&cnd));
 	flag = 0;
 
-	CHK_THRD(thrd_create(&thread, hold_mutex_three_seconds, NULL));
+	CHK_THRD(thrd_create(&thread, hold_mutex_for_one_second, NULL));
 
 	CHK_THRD(mtx_lock(&mtx2));
 	while (!flag) {
@@ -172,14 +172,24 @@ void run_timed_mtx_test(void)
 	mtx_destroy(&mtx2);
 
 	CHK_EXPECTED(timespec_get(&ts, TIME_UTC), TIME_UTC);
-	ts.tv_sec = ts.tv_sec + 2;
+	ts.tv_nsec += 500000000;
+	if (ts.tv_nsec >= 1000000000) {
+		++ts.tv_sec;
+		ts.tv_nsec -= 1000000000;
+	}
 	CHK_THRD_EXPECTED(mtx_timedlock(&mtx, &ts), thrd_timedout);
 	puts("thread has locked mutex & we timed out waiting for it");
 
-	dur.tv_sec = 4;
+	dur.tv_sec = 1;
 	dur.tv_nsec = 0;
 	CHK_EXPECTED(thrd_sleep(&dur, NULL), 0);
 
+	CHK_EXPECTED(timespec_get(&ts, TIME_UTC), TIME_UTC);
+	ts.tv_nsec += 500000000;
+	if (ts.tv_nsec >= 1000000000) {
+		++ts.tv_sec;
+		ts.tv_nsec -= 1000000000;
+	}
 	CHK_THRD(mtx_timedlock(&mtx, &ts));
 	puts("thread no longer has mutex & we grabbed it");
 	CHK_THRD(mtx_unlock(&mtx));
@@ -246,7 +256,7 @@ void run_cnd_test(void)
 	puts("main thread: set flag to NUM_THREADS + 1");
 
 	/* No guarantees, but this might unblock two threads. */
-	puts("main thread: sending condvar signal twice");
+	puts("main thread: sending cnd_signal() twice");
 	CHK_THRD(cnd_signal(&cnd));
 	CHK_THRD(cnd_signal(&cnd));
 	CHK_THRD(thrd_sleep(&dur, NULL));
