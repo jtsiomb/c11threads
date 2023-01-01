@@ -16,6 +16,7 @@
 mtx_t mtx;
 mtx_t mtx2;
 cnd_t cnd;
+cnd_t cnd2;
 tss_t tss;
 once_flag once = ONCE_FLAG_INIT;
 int flag;
@@ -23,10 +24,11 @@ int flag;
 #define CHK_THRD_EXPECTED(a, b) assert_thrd_expected(a, b, __FILE__, __LINE__, #a, #b)
 #define CHK_THRD(a) CHK_THRD_EXPECTED(a, thrd_success)
 #define CHK_EXPECTED(a, b) assert_expected(a, b, __FILE__, __LINE__, #a, #b)
-#define NUM_THREADS 4
+#define NUM_THREADS 8
 
 void run_thread_test(void);
 void run_timed_mtx_test(void);
+void run_cnd_test(void);
 void run_tss_test(void);
 void run_call_once_test(void);
 
@@ -39,6 +41,10 @@ int main(void)
 	puts("start timed mutex test");
 	run_timed_mtx_test();
 	puts("end timed mutex test\n");
+
+	puts("start condvar test");
+	run_cnd_test();
+	puts("end condvar test\n");
 
 	puts("start thread-specific storage test");
 	run_tss_test();
@@ -182,6 +188,86 @@ void run_timed_mtx_test(void)
 }
 #endif
 
+int my_cnd_thread_func(void *arg)
+{
+	size_t thread_num;
+	thread_num = (size_t)arg;
+	CHK_THRD(mtx_lock(&mtx));
+	++flag;
+	CHK_THRD(cnd_signal(&cnd2));
+	do {
+		CHK_THRD(cnd_wait(&cnd, &mtx));
+		printf("thread %zu: woke up\n", thread_num);
+	} while (flag <= NUM_THREADS);
+	printf("thread %zu: flag > NUM_THREADS; incrementing flag and exiting\n", thread_num);
+	++flag;
+	CHK_THRD(cnd_signal(&cnd2));
+	CHK_THRD(mtx_unlock(&mtx));
+	return 0;
+}
+
+void run_cnd_test(void)
+{
+	struct timespec dur;
+	size_t i;
+	thrd_t threads[NUM_THREADS];
+
+	flag = 0;
+	dur.tv_sec = 0;
+	dur.tv_nsec = 500000000;
+	CHK_THRD(mtx_init(&mtx, mtx_plain));
+	CHK_THRD(cnd_init(&cnd));
+	CHK_THRD(cnd_init(&cnd2));
+
+	for (i = 0; i < NUM_THREADS; i++) {
+		CHK_THRD(thrd_create(threads + i, my_cnd_thread_func, (void*)i));
+	}
+
+	CHK_THRD(mtx_lock(&mtx));
+	while (flag != NUM_THREADS) {
+		CHK_THRD(cnd_wait(&cnd2, &mtx));
+	}
+	CHK_THRD(mtx_unlock(&mtx));
+	puts("main thread: threads are ready");
+
+	/* No guarantees, but this might unblock a thread. */
+	puts("main thread: cnd_signal()");
+	CHK_THRD(cnd_signal(&cnd));
+	CHK_THRD(thrd_sleep(&dur, NULL));
+
+	/* No guarantees, but this might unblock all threads. */
+	puts("main thread: cnd_broadcast()");
+	CHK_THRD(cnd_broadcast(&cnd));
+	CHK_THRD(thrd_sleep(&dur, NULL));
+
+	CHK_THRD(mtx_lock(&mtx));
+	flag = NUM_THREADS + 1;
+	CHK_THRD(mtx_unlock(&mtx));
+	puts("main thread: set flag to NUM_THREADS + 1");
+
+	/* No guarantees, but this might unblock two threads. */
+	puts("main thread: sending condvar signal twice");
+	CHK_THRD(cnd_signal(&cnd));
+	CHK_THRD(cnd_signal(&cnd));
+	CHK_THRD(thrd_sleep(&dur, NULL));
+
+	CHK_THRD(mtx_lock(&mtx));
+	while (flag == NUM_THREADS + 1) {
+		CHK_THRD(cnd_wait(&cnd2, &mtx));
+	}
+	CHK_THRD(mtx_unlock(&mtx));
+
+	puts("main thread: woke up, flag != NUM_THREADS + 1; sending cnd_broadcast() and joining threads");
+	CHK_THRD(cnd_broadcast(&cnd));
+	for (i = 0; i < NUM_THREADS; i++) {
+		CHK_THRD(thrd_join(threads[i], NULL));
+	}
+
+	cnd_destroy(&cnd2);
+	cnd_destroy(&cnd);
+	mtx_destroy(&mtx);
+}
+
 void my_tss_dtor(void *arg)
 {
 	printf("dtor: content of tss: %zu\n", (size_t)arg);
@@ -228,18 +314,18 @@ int my_call_once_thread_func(void *arg)
 
 void run_call_once_test(void)
 {
-	thrd_t thread1;
-	thrd_t thread2;
-	thrd_t thread3;
+	size_t i;
+	thrd_t threads[NUM_THREADS];
 
 	flag = 0;
 
-	CHK_THRD(thrd_create(&thread1, my_call_once_thread_func, NULL));
-	CHK_THRD(thrd_create(&thread2, my_call_once_thread_func, NULL));
-	CHK_THRD(thrd_create(&thread3, my_call_once_thread_func, NULL));
-	CHK_THRD(thrd_join(thread1, NULL));
-	CHK_THRD(thrd_join(thread2, NULL));
-	CHK_THRD(thrd_join(thread3, NULL));
+	for (i = 0; i < NUM_THREADS; i++) {
+		CHK_THRD(thrd_create(threads + i, my_call_once_thread_func, NULL));
+	}
+
+	for (i = 0; i < NUM_THREADS; i++) {
+		CHK_THRD(thrd_join(threads[i], NULL));
+	}
 
 	printf("content of flag: %d\n", flag);
 
