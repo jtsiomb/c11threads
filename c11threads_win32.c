@@ -791,9 +791,10 @@ int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11
 }
 #else
 struct _c11threads_win32_cnd_t {
-	CRITICAL_SECTION critical_section;
-	void *signal_event;
+	void *mutex;
+	void *signal_sema;
 	void *broadcast_event;
+	void *broadcast_done_event;
 	size_t wait_count;
 };
 
@@ -801,28 +802,30 @@ int cnd_init(cnd_t *cond)
 {
 	struct _c11threads_win32_cnd_t *cnd;
 
-	cnd = malloc(sizeof(struct _c11threads_win32_cnd_t));
+	cnd = malloc(sizeof(*cnd));
 	if (!cnd) {
 		return thrd_nomem;
 	}
 
-#ifdef _MSC_VER
-#pragma warning(suppress: 28125) /* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
-#endif
-	InitializeCriticalSection(&cnd->critical_section);
-
-	cnd->signal_event = CreateEventW(NULL, 0, 0, NULL);
-	if (cnd->signal_event) {
-		cnd->broadcast_event = CreateEventW(NULL, 1, 0, NULL);
-		if (cnd->broadcast_event) {
-			cnd->wait_count = 0;
-			*cond = cnd;
-			return thrd_success;
+	cnd->mutex = CreateMutexW(NULL, 0, NULL);
+	if (cnd->mutex) {
+		cnd->signal_sema = CreateSemaphoreW(NULL, 0, 0x7fffffff, NULL);
+		if (cnd->signal_sema) {
+			cnd->broadcast_event = CreateEventW(NULL, 1, 0, NULL);
+			if (cnd->broadcast_event) {
+				cnd->broadcast_done_event = CreateEventW(NULL, 1, 0, NULL);
+				if (cnd->broadcast_done_event) {
+					cnd->wait_count = 0;
+					*cond = cnd;
+					return thrd_success;
+				}
+				CloseHandle(cnd->broadcast_done_event);
+			}
+			CloseHandle(cnd->signal_sema);
 		}
-		CloseHandle(cnd->signal_event);
+		CloseHandle(cnd->mutex);
 	}
 
-	DeleteCriticalSection(&cnd->critical_section);
 	free(cnd);
 	return thrd_error;
 }
@@ -832,25 +835,29 @@ void cnd_destroy(cnd_t *cond)
 	struct _c11threads_win32_cnd_t *cnd;
 	cnd = *cond;
 	assert(!cnd->wait_count);
+	CloseHandle(cnd->mutex);
+	CloseHandle(cnd->signal_sema);
 	CloseHandle(cnd->broadcast_event);
-	CloseHandle(cnd->signal_event);
-	DeleteCriticalSection(&cnd->critical_section);
+	CloseHandle(cnd->broadcast_done_event);
 	free(cnd);
 }
 
 int cnd_signal(cnd_t *cond)
 {
 	struct _c11threads_win32_cnd_t *cnd;
-	int success;
+	_Bool success;
 
 	cnd = *cond;
-	success = 1;
 
-	EnterCriticalSection(&cnd->critical_section);
-	if (cnd->wait_count) {
-		success = SetEvent(cnd->signal_event);
+	success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
+	if (success) {
+		if (cnd->wait_count) {
+			success = ReleaseSemaphore(cnd->signal_sema, 1, NULL) || GetLastError() == ERROR_TOO_MANY_POSTS;
+		}
+		if (!ReleaseMutex(cnd->mutex)) {
+			success = 0;
+		}
 	}
-	LeaveCriticalSection(&cnd->critical_section);
 
 	return success ? thrd_success : thrd_error;
 }
@@ -858,16 +865,19 @@ int cnd_signal(cnd_t *cond)
 int cnd_broadcast(cnd_t *cond)
 {
 	struct _c11threads_win32_cnd_t *cnd;
-	int success;
+	_Bool success;
 
 	cnd = *cond;
-	success = 1;
 
-	EnterCriticalSection(&cnd->critical_section);
-	if (cnd->wait_count) {
-		success = SetEvent(cnd->broadcast_event);
+	success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
+	if (success) {
+		if (cnd->wait_count) {
+			success = ResetEvent(cnd->broadcast_done_event) && SetEvent(cnd->broadcast_event);
+		}
+		if (!ReleaseMutex(cnd->mutex)) {
+			success = 0;
+		}
 	}
-	LeaveCriticalSection(&cnd->critical_section);
 
 	return success ? thrd_success : thrd_error;
 }
@@ -876,39 +886,62 @@ int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wai
 {
 	struct _c11threads_win32_cnd_t *cnd;
 	unsigned long wait_status;
+	unsigned long wait_status_2;
 	int res;
 
 	cnd = *cond;
 
-	EnterCriticalSection(&cnd->critical_section);
-	++cnd->wait_count;
-	LeaveCriticalSection(&cnd->critical_section);
+	if (WaitForSingleObject(cnd->mutex, INFINITE) != WAIT_OBJECT_0) {
+		return thrd_error;
+	}
 	LeaveCriticalSection((PCRITICAL_SECTION)mtx);
+	++cnd->wait_count;
+	if (!ReleaseMutex(cnd->mutex)) {
+		abort();
+	}
 
-	wait_status = WaitForMultipleObjects(2, &cnd->signal_event /* and cnd->broadcast_event */, 0, wait_time);
+	wait_status = WaitForMultipleObjects(2, &cnd->signal_sema /* and cnd->broadcast_event */, 0, wait_time);
 
-	EnterCriticalSection(&cnd->critical_section);
+	if (WaitForSingleObject(cnd->mutex, INFINITE) != WAIT_OBJECT_0) {
+		abort();
+	}
 	--cnd->wait_count;
 	if (cnd->wait_count) {
 		if (wait_status == WAIT_OBJECT_0 + 1 /* broadcast_event */) {
-			/* Wait for the other threads to unblock. */
-			do {
-				LeaveCriticalSection(&cnd->critical_section);
-				Sleep(0);
-				EnterCriticalSection(&cnd->critical_section);
-			} while (cnd->wait_count);
+			if (SignalObjectAndWait(cnd->mutex, cnd->broadcast_done_event, INFINITE, 0) != WAIT_OBJECT_0) {
+				abort();
+			}
+		} else if (!ReleaseMutex(cnd->mutex)) {
+			abort();
 		}
 	} else {
-		ResetEvent(cnd->signal_event);
-		ResetEvent(cnd->broadcast_event);
+		do {
+			wait_status_2 = WaitForSingleObject(cnd->signal_sema, 0);
+		} while (wait_status_2 == WAIT_OBJECT_0);
+		if (wait_status_2 != WAIT_TIMEOUT) {
+			abort();
+		}
+
+		if (!ResetEvent(cnd->broadcast_event)) {
+			abort();
+		}
+
+		if (!SetEvent(cnd->broadcast_done_event)) {
+			abort();
+		}
+
+		if (!ReleaseMutex(cnd->mutex)) {
+			abort();
+		}
 	}
-	LeaveCriticalSection(&cnd->critical_section);
 
 	res = thrd_success;
-	if (wait_status == WAIT_FAILED) {
+	if (wait_status == WAIT_TIMEOUT) {
+		if (!clamped) {
+			res = thrd_timedout;
+		}
+	} else if (wait_status != WAIT_OBJECT_0 && wait_status != WAIT_OBJECT_0 + 1) {
 		res = thrd_error;
-	} else if (!clamped && wait_status == WAIT_TIMEOUT) {
-		res = thrd_timedout;
 	}
 
 	EnterCriticalSection((PCRITICAL_SECTION)mtx);
