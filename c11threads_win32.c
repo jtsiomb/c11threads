@@ -78,10 +78,10 @@ static struct _c11threads_win32_tss_dtor_entry_t *_c11threads_win32_tss_dtor_lis
 static void _c11threads_win32_init(void)
 {
 	unsigned short os_version;
-	void *kernel32;
 	os_version = (unsigned short)GetVersion(); /* Keep in mind: Maximum version for unmanifested apps is Windows 8 (0x0602). */
 	_c11threads_win32_winver = (os_version << 8) | (os_version >> 8);
 	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
+		void *kernel32;
 		kernel32 = GetModuleHandleW(L"kernel32.dll");
 		if (!kernel32) {
 			abort();
@@ -164,12 +164,6 @@ void c11threads_win32_destroy(void)
 }
 
 /* ---- utilities ---- */
-
-static unsigned short _c11threads_win32_util_get_winver()
-{
-	_c11threads_win32_ensure_initialized();
-	return _c11threads_win32_winver;
-}
 
 static int _c11threads_win32_util_is_timespec32_valid(const struct _c11threads_win32_timespec32_t *ts)
 {
@@ -490,7 +484,8 @@ int c11threads_win32_thrd_self_register(void)
 	void *thread;
 
 	desired_access = SYNCHRONIZE | THREAD_QUERY_INFORMATION;
-	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		desired_access = SYNCHRONIZE | THREAD_QUERY_LIMITED_INFORMATION;
 	}
 
@@ -512,7 +507,8 @@ int c11threads_win32_thrd_register(unsigned long win32_thread_id)
 	void *h;
 
 	desired_access = SYNCHRONIZE | THREAD_QUERY_INFORMATION;
-	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		desired_access = SYNCHRONIZE | THREAD_QUERY_LIMITED_INFORMATION;
 	}
 
@@ -812,7 +808,8 @@ struct _c11threads_win32_cnd_t {
 
 int cnd_init(cnd_t *cond)
 {
-	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		_c11threads_win32_InitializeConditionVariable(cond);
 		return thrd_success;
 	} else {
@@ -849,7 +846,8 @@ int cnd_init(cnd_t *cond)
 
 void cnd_destroy(cnd_t *cond)
 {
-	if (_c11threads_win32_util_get_winver() < _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver < _WIN32_WINNT_VISTA) {
 		struct _c11threads_win32_cnd_t *cnd;
 		cnd = *cond;
 		assert(!cnd->wait_count);
@@ -863,7 +861,8 @@ void cnd_destroy(cnd_t *cond)
 
 int cnd_signal(cnd_t *cond)
 {
-	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		_c11threads_win32_WakeConditionVariable(cond);
 		return thrd_success;
 	} else {
@@ -888,7 +887,8 @@ int cnd_signal(cnd_t *cond)
 
 int cnd_broadcast(cnd_t *cond)
 {
-	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		_c11threads_win32_WakeAllConditionVariable(cond);
 		return thrd_success;
 	} else {
@@ -913,7 +913,8 @@ int cnd_broadcast(cnd_t *cond)
 
 static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, int clamped)
 {
-	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		if (_c11threads_win32_SleepConditionVariableCS(cond, (PCRITICAL_SECTION)mtx, wait_time)) {
 			return thrd_success;
 		}
@@ -1093,7 +1094,6 @@ int tss_create(tss_t *key, tss_dtor_t dtor)
 	}
 	if (dtor && !_c11threads_win32_tss_register(*key, dtor)) {
 		TlsFree(*key);
-		*key = 0;
 		return thrd_error;
 	}
 	return thrd_success;
@@ -1127,7 +1127,8 @@ static int __stdcall _c11threads_win32_call_once_thunk(void *init_once, void (*f
 
 void call_once(once_flag *flag, void (*func)(void))
 {
-	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+	_c11threads_win32_ensure_initialized();
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 #ifdef _MSC_VER
 #pragma warning(push)
 /* Warning C4054: 'type cast' : from function pointer 'int (__stdcall *)(void *,void (__cdecl *)(void),void **)' to data pointer 'const void *' */
