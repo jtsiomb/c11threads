@@ -26,7 +26,6 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define WINVER 0x0400 /* Windows NT 4.0 */
 #define _WIN32_WINNT WINVER
