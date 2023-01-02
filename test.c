@@ -13,6 +13,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define CHK_THRD_EXPECTED(a, b) assert_thrd_expected(a, b, __FILE__, __LINE__, #a, #b)
+#define CHK_THRD(a) CHK_THRD_EXPECTED(a, thrd_success)
+#define CHK_EXPECTED(a, b) assert_expected(a, b, __FILE__, __LINE__, #a, #b)
+#define NUM_THREADS 8
+
 mtx_t mtx;
 mtx_t mtx2;
 cnd_t cnd;
@@ -20,11 +25,6 @@ cnd_t cnd2;
 tss_t tss;
 once_flag once = ONCE_FLAG_INIT;
 int flag;
-
-#define CHK_THRD_EXPECTED(a, b) assert_thrd_expected(a, b, __FILE__, __LINE__, #a, #b)
-#define CHK_THRD(a) CHK_THRD_EXPECTED(a, thrd_success)
-#define CHK_EXPECTED(a, b) assert_expected(a, b, __FILE__, __LINE__, #a, #b)
-#define NUM_THREADS 8
 
 void run_thread_test(void);
 void run_timed_mtx_test(void);
@@ -102,26 +102,28 @@ void assert_expected(int res, int expected, const char *file, unsigned int line,
 
 int tfunc(void *arg)
 {
-	size_t num = (size_t)arg;
+	int num;
 	struct timespec dur;
 
-	printf("hello from thread %zu\n", num);
+	num = (int)(size_t)arg;
+
+	printf("hello from thread %d\n", num);
 
 	dur.tv_sec = 1;
 	dur.tv_nsec = 0;
 	CHK_EXPECTED(thrd_sleep(&dur, NULL), 0);
 
-	printf("thread %zu done\n", num);
+	printf("thread %d done\n", num);
 	return 0;
 }
 
 void run_thread_test(void)
 {
-	size_t i;
+	int i;
 	thrd_t threads[NUM_THREADS];
 
 	for (i = 0; i < NUM_THREADS; i++) {
-		CHK_THRD(thrd_create(threads + i, tfunc, (void*)i));
+		CHK_THRD(thrd_create(threads + i, tfunc, (void*)(size_t)i));
 	}
 	for (i = 0; i < NUM_THREADS; i++) {
 		CHK_THRD(thrd_join(threads[i], NULL));
@@ -131,8 +133,9 @@ void run_thread_test(void)
 #if !defined(_WIN32) || defined(C11THREADS_PTHREAD_WIN32) || !defined(C11THREADS_OLD_WIN32API)
 int hold_mutex_for_one_second(void* arg)
 {
-	(void)arg;
 	struct timespec dur;
+
+	(void)arg;
 
 	CHK_THRD(mtx_lock(&mtx));
 
@@ -200,16 +203,16 @@ void run_timed_mtx_test(void)
 
 int my_cnd_thread_func(void *arg)
 {
-	size_t thread_num;
-	thread_num = (size_t)arg;
+	int thread_num;
+	thread_num = (int)(size_t)arg;
 	CHK_THRD(mtx_lock(&mtx));
 	++flag;
 	CHK_THRD(cnd_signal(&cnd2));
 	do {
 		CHK_THRD(cnd_wait(&cnd, &mtx));
-		printf("thread %zu: woke up\n", thread_num);
+		printf("thread %d: woke up\n", thread_num);
 	} while (flag <= NUM_THREADS);
-	printf("thread %zu: flag > NUM_THREADS; incrementing flag and exiting\n", thread_num);
+	printf("thread %d: flag > NUM_THREADS; incrementing flag and exiting\n", thread_num);
 	++flag;
 	CHK_THRD(cnd_signal(&cnd2));
 	CHK_THRD(mtx_unlock(&mtx));
@@ -219,7 +222,7 @@ int my_cnd_thread_func(void *arg)
 void run_cnd_test(void)
 {
 	struct timespec dur;
-	size_t i;
+	int i;
 	thrd_t threads[NUM_THREADS];
 
 	flag = 0;
@@ -230,7 +233,7 @@ void run_cnd_test(void)
 	CHK_THRD(cnd_init(&cnd2));
 
 	for (i = 0; i < NUM_THREADS; i++) {
-		CHK_THRD(thrd_create(threads + i, my_cnd_thread_func, (void*)i));
+		CHK_THRD(thrd_create(threads + i, my_cnd_thread_func, (void*)(size_t)i));
 	}
 
 	CHK_THRD(mtx_lock(&mtx));
@@ -280,20 +283,21 @@ void run_cnd_test(void)
 
 void my_tss_dtor(void *arg)
 {
-	printf("dtor: content of tss: %zu\n", (size_t)arg);
+	printf("dtor: content of tss: %d\n", (int)(size_t)arg);
 	CHK_EXPECTED((int)(size_t)arg, 42);
 }
 
 int my_tss_thread_func(void *arg)
 {
-	(void)arg;
 	void *tss_content;
 
+	(void)arg;
+
 	tss_content = tss_get(tss);
-	printf("thread func: initial content of tss: %zu\n", (size_t)tss_content);
+	printf("thread func: initial content of tss: %d\n", (int)(size_t)tss_content);
 	CHK_THRD(tss_set(tss, (void*)42));
 	tss_content = tss_get(tss);
-	printf("thread func: initial content of tss: %zu\n", (size_t)tss_content);
+	printf("thread func: content of tss now: %d\n", (int)(size_t)tss_content);
 	CHK_EXPECTED((int)(size_t)tss_content, 42);
 	return 0;
 }
@@ -324,7 +328,7 @@ int my_call_once_thread_func(void *arg)
 
 void run_call_once_test(void)
 {
-	size_t i;
+	int i;
 	thrd_t threads[NUM_THREADS];
 
 	flag = 0;

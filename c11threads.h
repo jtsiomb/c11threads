@@ -57,6 +57,26 @@ Main project site: https://github.com/jtsiomb/c11threads
 #endif
 
 #ifdef __cplusplus
+#define C11THREADS_MAYBE_INLINE inline
+#elif defined(_MSC_VER)
+#if _MSC_VER >= 1900
+#define C11THREADS_MAYBE_INLINE inline
+#else
+#define C11THREADS_MAYBE_INLINE
+#endif
+#elif  __STDC_VERSION__ >= 199901L
+#define C11THREADS_MAYBE_INLINE inline
+#else
+#define C11THREADS_MAYBE_INLINE
+#endif
+
+#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
+#define C11THREADS_MAYBE_STATIC_INLINE
+#else
+#define C11THREADS_MAYBE_STATIC_INLINE static C11THREADS_MAYBE_INLINE
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -82,6 +102,21 @@ struct _c11threads_win32_timespec64_t {
 	long long tv_sec;
 	long tv_nsec;
 };
+#ifdef _MSC_VER
+#if _MSC_VER < 1900
+#ifdef _USE_32BIT_TIME_T
+struct timespec {
+	long tv_sec;
+	long tv_nsec;
+};
+#else
+struct timespec {
+	long long tv_sec;
+	long tv_nsec;
+};
+#endif
+#endif
+#endif
 #else
 typedef pthread_t thrd_t;
 typedef pthread_mutex_t mtx_t;
@@ -107,58 +142,52 @@ enum {
 	thrd_nomem
 };
 
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-#define C11THREADS_MAYBE_INLINE
-#else
-#define C11THREADS_MAYBE_INLINE static inline
-#endif
-
 /* Thread functions. */
 
-C11THREADS_MAYBE_INLINE int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
+C11THREADS_MAYBE_STATIC_INLINE int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
 /* Win32: Threads not created with thrd_create() need to call this to clean up TSS. */
-C11THREADS_MAYBE_INLINE void thrd_exit(int res);
-C11THREADS_MAYBE_INLINE int thrd_join(thrd_t thr, int *res);
-C11THREADS_MAYBE_INLINE int thrd_detach(thrd_t thr);
-C11THREADS_MAYBE_INLINE thrd_t thrd_current(void);
-C11THREADS_MAYBE_INLINE int thrd_equal(thrd_t a, thrd_t b);
-static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out);
-C11THREADS_MAYBE_INLINE void thrd_yield(void);
+C11THREADS_MAYBE_STATIC_INLINE void thrd_exit(int res);
+C11THREADS_MAYBE_STATIC_INLINE int thrd_join(thrd_t thr, int *res);
+C11THREADS_MAYBE_STATIC_INLINE int thrd_detach(thrd_t thr);
+C11THREADS_MAYBE_STATIC_INLINE thrd_t thrd_current(void);
+C11THREADS_MAYBE_STATIC_INLINE int thrd_equal(thrd_t a, thrd_t b);
+static C11THREADS_MAYBE_INLINE int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out);
+C11THREADS_MAYBE_STATIC_INLINE void thrd_yield(void);
 
 /* Mutex functions. */
 
-C11THREADS_MAYBE_INLINE int mtx_init(mtx_t *mtx, int type);
-C11THREADS_MAYBE_INLINE void mtx_destroy(mtx_t *mtx);
-C11THREADS_MAYBE_INLINE int mtx_lock(mtx_t *mtx);
-C11THREADS_MAYBE_INLINE int mtx_trylock(mtx_t *mtx);
-static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts);
-C11THREADS_MAYBE_INLINE int mtx_unlock(mtx_t *mtx);
+C11THREADS_MAYBE_STATIC_INLINE int mtx_init(mtx_t *mtx, int type);
+C11THREADS_MAYBE_STATIC_INLINE void mtx_destroy(mtx_t *mtx);
+C11THREADS_MAYBE_STATIC_INLINE int mtx_lock(mtx_t *mtx);
+C11THREADS_MAYBE_STATIC_INLINE int mtx_trylock(mtx_t *mtx);
+static C11THREADS_MAYBE_INLINE int mtx_timedlock(mtx_t *mtx, const struct timespec *ts);
+C11THREADS_MAYBE_STATIC_INLINE int mtx_unlock(mtx_t *mtx);
 
 /* Condition variable functions. */
 
-C11THREADS_MAYBE_INLINE int cnd_init(cnd_t *cond);
-C11THREADS_MAYBE_INLINE void cnd_destroy(cnd_t *cond);
-C11THREADS_MAYBE_INLINE int cnd_signal(cnd_t *cond);
-C11THREADS_MAYBE_INLINE int cnd_broadcast(cnd_t *cond);
-C11THREADS_MAYBE_INLINE int cnd_wait(cnd_t *cond, mtx_t *mtx);
-static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts);
+C11THREADS_MAYBE_STATIC_INLINE int cnd_init(cnd_t *cond);
+C11THREADS_MAYBE_STATIC_INLINE void cnd_destroy(cnd_t *cond);
+C11THREADS_MAYBE_STATIC_INLINE int cnd_signal(cnd_t *cond);
+C11THREADS_MAYBE_STATIC_INLINE int cnd_broadcast(cnd_t *cond);
+C11THREADS_MAYBE_STATIC_INLINE int cnd_wait(cnd_t *cond, mtx_t *mtx);
+static C11THREADS_MAYBE_INLINE int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts);
 
 /* Thread-specific storage functions. */
 
-C11THREADS_MAYBE_INLINE int tss_create(tss_t *key, tss_dtor_t dtor);
-C11THREADS_MAYBE_INLINE void tss_delete(tss_t key);
-C11THREADS_MAYBE_INLINE int tss_set(tss_t key, void *val);
-C11THREADS_MAYBE_INLINE void *tss_get(tss_t key);
+C11THREADS_MAYBE_STATIC_INLINE int tss_create(tss_t *key, tss_dtor_t dtor);
+C11THREADS_MAYBE_STATIC_INLINE void tss_delete(tss_t key);
+C11THREADS_MAYBE_STATIC_INLINE int tss_set(tss_t key, void *val);
+C11THREADS_MAYBE_STATIC_INLINE void *tss_get(tss_t key);
 
 /* One-time callable function. */
 
-C11THREADS_MAYBE_INLINE void call_once(once_flag *flag, void (*func)(void));
+C11THREADS_MAYBE_STATIC_INLINE void call_once(once_flag *flag, void (*func)(void));
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
-#ifndef UTC_TIME
-#define UTC_TIME 1
+#ifndef TIME_UTC
+#define TIME_UTC 1
 #endif
-static inline int timespec_get(struct timespec *ts, int base);
+static C11THREADS_MAYBE_INLINE int timespec_get(struct timespec *ts, int base);
 #endif
 
 /* Special Win32 functions. */
@@ -184,7 +213,7 @@ int c11threads_win32_thrd_register(unsigned long win32_thread_id);
 
 int _c11threads_win32_thrd_sleep32(const struct _c11threads_win32_timespec32_t *ts_in, struct _c11threads_win32_timespec32_t *rem_out);
 int _c11threads_win32_thrd_sleep64(const struct _c11threads_win32_timespec64_t *ts_in, struct _c11threads_win32_timespec64_t *rem_out);
-static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
+static C11THREADS_MAYBE_INLINE int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
 	if (sizeof(ts_in->tv_sec) == 4) {
 		return _c11threads_win32_thrd_sleep32((const struct _c11threads_win32_timespec32_t*)ts_in, (struct _c11threads_win32_timespec32_t*)rem_out);
@@ -197,7 +226,7 @@ static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_
 
 int _c11threads_win32_mtx_timedlock32(mtx_t *mtx, const struct _c11threads_win32_timespec32_t *ts);
 int _c11threads_win32_mtx_timedlock64(mtx_t *mtx, const struct _c11threads_win32_timespec64_t *ts);
-static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
+static C11THREADS_MAYBE_INLINE int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
 	if (sizeof(ts->tv_sec) == 4) {
 		return _c11threads_win32_mtx_timedlock32(mtx, (const struct _c11threads_win32_timespec32_t*)ts);
@@ -210,7 +239,7 @@ static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 
 int _c11threads_win32_cnd_timedwait32(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec32_t *ts);
 int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec64_t *ts);
-static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
+static C11THREADS_MAYBE_INLINE int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 {
 	if (sizeof(ts->tv_sec) == 4) {
 		return _c11threads_win32_cnd_timedwait32(cond, mtx, (const struct _c11threads_win32_timespec32_t*)ts);
@@ -224,7 +253,7 @@ static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *
 #ifdef C11THREADS_NO_TIMESPEC_GET
 int _c11threads_win32_timespec32_get(struct _c11threads_win32_timespec32_t *ts, int base);
 int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, int base);
-static inline int timespec_get(struct timespec *ts, int base)
+static C11THREADS_MAYBE_INLINE int timespec_get(struct timespec *ts, int base)
 {
 	if (sizeof(ts->tv_sec) == 4) {
 		return _c11threads_win32_timespec32_get((struct _c11threads_win32_timespec32_t*)ts, base);
@@ -242,7 +271,7 @@ static inline int timespec_get(struct timespec *ts, int base)
 
 /* ---- thread management ---- */
 
-static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
+static C11THREADS_MAYBE_INLINE int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 {
 	int res = pthread_create(thr, 0, (void*(*)(void*))func, arg);
 	if(res == 0) {
@@ -251,12 +280,12 @@ static inline int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 	return res == ENOMEM ? thrd_nomem : thrd_error;
 }
 
-static inline void thrd_exit(int res)
+static C11THREADS_MAYBE_INLINE void thrd_exit(int res)
 {
 	pthread_exit((void*)(intptr_t)res);
 }
 
-static inline int thrd_join(thrd_t thr, int *res)
+static C11THREADS_MAYBE_INLINE int thrd_join(thrd_t thr, int *res)
 {
 	void *retval;
 
@@ -269,22 +298,22 @@ static inline int thrd_join(thrd_t thr, int *res)
 	return thrd_success;
 }
 
-static inline int thrd_detach(thrd_t thr)
+static C11THREADS_MAYBE_INLINE int thrd_detach(thrd_t thr)
 {
 	return pthread_detach(thr) == 0 ? thrd_success : thrd_error;
 }
 
-static inline thrd_t thrd_current(void)
+static C11THREADS_MAYBE_INLINE thrd_t thrd_current(void)
 {
 	return pthread_self();
 }
 
-static inline int thrd_equal(thrd_t a, thrd_t b)
+static C11THREADS_MAYBE_INLINE int thrd_equal(thrd_t a, thrd_t b)
 {
 	return pthread_equal(a, b);
 }
 
-static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
+static C11THREADS_MAYBE_INLINE int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
 	if(nanosleep(ts_in, rem_out) < 0) {
 		if(errno == EINTR) return -1;
@@ -293,14 +322,14 @@ static inline int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_
 	return 0;
 }
 
-static inline void thrd_yield(void)
+static C11THREADS_MAYBE_INLINE void thrd_yield(void)
 {
 	sched_yield();
 }
 
 /* ---- mutexes ---- */
 
-static inline int mtx_init(mtx_t *mtx, int type)
+static C11THREADS_MAYBE_INLINE int mtx_init(mtx_t *mtx, int type)
 {
 	int res;
 	pthread_mutexattr_t attr;
@@ -323,12 +352,12 @@ static inline int mtx_init(mtx_t *mtx, int type)
 	return res;
 }
 
-static inline void mtx_destroy(mtx_t *mtx)
+static C11THREADS_MAYBE_INLINE void mtx_destroy(mtx_t *mtx)
 {
 	pthread_mutex_destroy(mtx);
 }
 
-static inline int mtx_lock(mtx_t *mtx)
+static C11THREADS_MAYBE_INLINE int mtx_lock(mtx_t *mtx)
 {
 	int res = pthread_mutex_lock(mtx);
 	if(res == EDEADLK) {
@@ -337,7 +366,7 @@ static inline int mtx_lock(mtx_t *mtx)
 	return res == 0 ? thrd_success : thrd_error;
 }
 
-static inline int mtx_trylock(mtx_t *mtx)
+static C11THREADS_MAYBE_INLINE int mtx_trylock(mtx_t *mtx)
 {
 	int res = pthread_mutex_trylock(mtx);
 	if(res == EBUSY) {
@@ -346,7 +375,7 @@ static inline int mtx_trylock(mtx_t *mtx)
 	return res == 0 ? thrd_success : thrd_error;
 }
 
-static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
+static C11THREADS_MAYBE_INLINE int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
 	int res = 0;
 #ifdef C11THREADS_NO_TIMED_MUTEX
@@ -375,39 +404,39 @@ static inline int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 	return res == 0 ? thrd_success : thrd_error;
 }
 
-static inline int mtx_unlock(mtx_t *mtx)
+static C11THREADS_MAYBE_INLINE int mtx_unlock(mtx_t *mtx)
 {
 	return pthread_mutex_unlock(mtx) == 0 ? thrd_success : thrd_error;
 }
 
 /* ---- condition variables ---- */
 
-static inline int cnd_init(cnd_t *cond)
+static C11THREADS_MAYBE_INLINE int cnd_init(cnd_t *cond)
 {
 	return pthread_cond_init(cond, 0) == 0 ? thrd_success : thrd_error;
 }
 
-static inline void cnd_destroy(cnd_t *cond)
+static C11THREADS_MAYBE_INLINE void cnd_destroy(cnd_t *cond)
 {
 	pthread_cond_destroy(cond);
 }
 
-static inline int cnd_signal(cnd_t *cond)
+static C11THREADS_MAYBE_INLINE int cnd_signal(cnd_t *cond)
 {
 	return pthread_cond_signal(cond) == 0 ? thrd_success : thrd_error;
 }
 
-static inline int cnd_broadcast(cnd_t *cond)
+static C11THREADS_MAYBE_INLINE int cnd_broadcast(cnd_t *cond)
 {
 	return pthread_cond_broadcast(cond) == 0 ? thrd_success : thrd_error;
 }
 
-static inline int cnd_wait(cnd_t *cond, mtx_t *mtx)
+static C11THREADS_MAYBE_INLINE int cnd_wait(cnd_t *cond, mtx_t *mtx)
 {
 	return pthread_cond_wait(cond, mtx) == 0 ? thrd_success : thrd_error;
 }
 
-static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
+static C11THREADS_MAYBE_INLINE int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 {
 	int res;
 
@@ -419,35 +448,35 @@ static inline int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *
 
 /* ---- thread-specific data ---- */
 
-static inline int tss_create(tss_t *key, tss_dtor_t dtor)
+static C11THREADS_MAYBE_INLINE int tss_create(tss_t *key, tss_dtor_t dtor)
 {
 	return pthread_key_create(key, dtor) == 0 ? thrd_success : thrd_error;
 }
 
-static inline void tss_delete(tss_t key)
+static C11THREADS_MAYBE_INLINE void tss_delete(tss_t key)
 {
 	pthread_key_delete(key);
 }
 
-static inline int tss_set(tss_t key, void *val)
+static C11THREADS_MAYBE_INLINE int tss_set(tss_t key, void *val)
 {
 	return pthread_setspecific(key, val) == 0 ? thrd_success : thrd_error;
 }
 
-static inline void *tss_get(tss_t key)
+static C11THREADS_MAYBE_INLINE void *tss_get(tss_t key)
 {
 	return pthread_getspecific(key);
 }
 
 /* ---- misc ---- */
 
-static inline void call_once(once_flag *flag, void (*func)(void))
+static C11THREADS_MAYBE_INLINE void call_once(once_flag *flag, void (*func)(void))
 {
 	pthread_once(flag, func);
 }
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
-static inline int timespec_get(struct timespec *ts, int base)
+static C11THREADS_MAYBE_INLINE int timespec_get(struct timespec *ts, int base)
 {
 	struct timeval tv;
 

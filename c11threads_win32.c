@@ -171,12 +171,12 @@ static unsigned short _c11threads_win32_util_get_winver()
 	return _c11threads_win32_winver;
 }
 
-static _Bool _c11threads_win32_util_is_timespec32_valid(const struct _c11threads_win32_timespec32_t *ts)
+static int _c11threads_win32_util_is_timespec32_valid(const struct _c11threads_win32_timespec32_t *ts)
 {
 	return ts->tv_sec >= 0 && ts->tv_nsec >= 0 && ts->tv_nsec <= 999999999;
 }
 
-static _Bool _c11threads_win32_util_is_timespec64_valid(const struct _c11threads_win32_timespec64_t *ts)
+static int _c11threads_win32_util_is_timespec64_valid(const struct _c11threads_win32_timespec64_t *ts)
 {
 	return ts->tv_sec >= 0 && ts->tv_nsec >= 0 && ts->tv_nsec <= 999999999;
 }
@@ -226,7 +226,7 @@ static long long _c11threads_win32_util_timespec64_to_file_time(const struct _c1
 }
 
 /* Precondition: 'ts' validated. */
-static _Bool _c11threads_win32_util_timespec32_to_milliseconds(const struct _c11threads_win32_timespec32_t *ts, unsigned long *ms)
+static int _c11threads_win32_util_timespec32_to_milliseconds(const struct _c11threads_win32_timespec32_t *ts, unsigned long *ms)
 {
 	unsigned long sec_res;
 	unsigned long nsec_res;
@@ -250,7 +250,7 @@ static _Bool _c11threads_win32_util_timespec32_to_milliseconds(const struct _c11
 }
 
 /* Precondition: 'ts' validated. */
-static _Bool _c11threads_win32_util_timespec64_to_milliseconds(const struct _c11threads_win32_timespec64_t *ts, unsigned long *ms)
+static int _c11threads_win32_util_timespec64_to_milliseconds(const struct _c11threads_win32_timespec64_t *ts, unsigned long *ms)
 {
 	unsigned long sec_res;
 	unsigned long nsec_res;
@@ -274,7 +274,7 @@ static _Bool _c11threads_win32_util_timespec64_to_milliseconds(const struct _c11
 }
 
 /* Precondition: 'current_time' and 'end_time' validated. */
-static unsigned long _c11threads_win32_util_timepoint_to_millisecond_timespan32(const struct _c11threads_win32_timespec32_t *current_time, const struct _c11threads_win32_timespec32_t *end_time, _Bool *clamped) {
+static unsigned long _c11threads_win32_util_timepoint_to_millisecond_timespan32(const struct _c11threads_win32_timespec32_t *current_time, const struct _c11threads_win32_timespec32_t *end_time, int *clamped) {
 	unsigned long wait_time;
 	struct _c11threads_win32_timespec32_t ts;
 
@@ -300,7 +300,7 @@ static unsigned long _c11threads_win32_util_timepoint_to_millisecond_timespan32(
 }
 
 /* Precondition: 'current_time' and 'end_time' validated. */
-static unsigned long _c11threads_win32_util_timepoint_to_millisecond_timespan64(const struct _c11threads_win32_timespec64_t *current_time, const struct _c11threads_win32_timespec64_t *end_time, _Bool *clamped) {
+static unsigned long _c11threads_win32_util_timepoint_to_millisecond_timespan64(const struct _c11threads_win32_timespec64_t *current_time, const struct _c11threads_win32_timespec64_t *end_time, int *clamped) {
 	unsigned long wait_time;
 	struct _c11threads_win32_timespec64_t ts;
 
@@ -381,7 +381,7 @@ int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, 
 
 /* ---- thread management ---- */
 
-static _Bool _c11threads_win32_thrd_register(thrd_t thrd, HANDLE h)
+static int _c11threads_win32_thrd_register(thrd_t thrd, HANDLE h)
 {
 	struct _c11threads_win32_thrd_entry_t *thread_entry;
 	struct _c11threads_win32_thrd_entry_t **curr;
@@ -442,7 +442,7 @@ static void *_c11threads_win32_thrd_pop_entry(thrd_t thrd)
 
 static void _c11threads_win32_thrd_run_tss_dtors(void)
 {
-	_Bool ran_dtor;
+	int ran_dtor;
 	size_t i;
 	struct _c11threads_win32_tss_dtor_entry_t *prev;
 	struct _c11threads_win32_tss_dtor_entry_t *curr;
@@ -868,7 +868,7 @@ int cnd_signal(cnd_t *cond)
 		return thrd_success;
 	} else {
 		struct _c11threads_win32_cnd_t *cnd;
-		_Bool success;
+		int success;
 
 		cnd = *cond;
 
@@ -893,7 +893,7 @@ int cnd_broadcast(cnd_t *cond)
 		return thrd_success;
 	} else {
 		struct _c11threads_win32_cnd_t *cnd;
-		_Bool success;
+		int success;
 
 		cnd = *cond;
 
@@ -911,7 +911,7 @@ int cnd_broadcast(cnd_t *cond)
 	}
 }
 
-static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, _Bool clamped)
+static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, int clamped)
 {
 	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
 		if (_c11threads_win32_SleepConditionVariableCS(cond, (PCRITICAL_SECTION)mtx, wait_time)) {
@@ -998,7 +998,7 @@ int _c11threads_win32_cnd_timedwait32(cnd_t *cond, mtx_t *mtx, const struct _c11
 {
 	struct _c11threads_win32_timespec32_t current_time;
 	unsigned long wait_time;
-	_Bool clamped;
+	int clamped;
 
 	if (!_c11threads_win32_util_is_timespec32_valid(ts)) {
 		return thrd_error;
@@ -1017,7 +1017,7 @@ int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11
 {
 	struct _c11threads_win32_timespec64_t current_time;
 	unsigned long wait_time;
-	_Bool clamped;
+	int clamped;
 
 	if (!_c11threads_win32_util_is_timespec64_valid(ts)) {
 		return thrd_error;
@@ -1034,7 +1034,7 @@ int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11
 
 /* ---- thread-specific data ---- */
 
-static _Bool _c11threads_win32_tss_register(tss_t key, tss_dtor_t dtor) {
+static int _c11threads_win32_tss_register(tss_t key, tss_dtor_t dtor) {
 	struct _c11threads_win32_tss_dtor_entry_t *tss_dtor_entry;
 	struct _c11threads_win32_tss_dtor_entry_t **curr;
 
@@ -1128,7 +1128,16 @@ static int __stdcall _c11threads_win32_call_once_thunk(void *init_once, void (*f
 void call_once(once_flag *flag, void (*func)(void))
 {
 	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
-		_c11threads_win32_InitOnceExecuteOnce((void*)flag, (void*)_c11threads_win32_call_once_thunk, (void*)func, NULL);
+#ifdef _MSC_VER
+#pragma warning(push)
+/* Warning C4054: 'type cast' : from function pointer 'int (__stdcall *)(void *,void (__cdecl *)(void),void **)' to data pointer 'const void *' */
+/* Warning C4054: 'type cast' : from function pointer 'void (__cdecl *)(void)' to data pointer 'void *' */
+#pragma warning(disable: 4054)
+#endif
+		_c11threads_win32_InitOnceExecuteOnce((void*)flag, (const void*)_c11threads_win32_call_once_thunk, (void*)func, NULL);
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 	} else {
 		if (InterlockedCompareExchange((long*)flag, 1, 0) == 0) {
 			func();
