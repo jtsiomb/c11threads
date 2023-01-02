@@ -802,7 +802,6 @@ struct _c11threads_win32_cnd_t {
 	void *mutex;
 	void *signal_sema;
 	void *broadcast_event;
-	void *broadcast_done_event;
 	size_t wait_count;
 };
 
@@ -826,13 +825,9 @@ int cnd_init(cnd_t *cond)
 			if (cnd->signal_sema) {
 				cnd->broadcast_event = CreateEventW(NULL, 1, 0, NULL);
 				if (cnd->broadcast_event) {
-					cnd->broadcast_done_event = CreateEventW(NULL, 1, 0, NULL);
-					if (cnd->broadcast_done_event) {
-						cnd->wait_count = 0;
-						*cond = cnd;
-						return thrd_success;
-					}
-					CloseHandle(cnd->broadcast_done_event);
+					cnd->wait_count = 0;
+					*cond = cnd;
+					return thrd_success;
 				}
 				CloseHandle(cnd->signal_sema);
 			}
@@ -854,7 +849,6 @@ void cnd_destroy(cnd_t *cond)
 		CloseHandle(cnd->mutex);
 		CloseHandle(cnd->signal_sema);
 		CloseHandle(cnd->broadcast_event);
-		CloseHandle(cnd->broadcast_done_event);
 		free(cnd);
 	}
 }
@@ -900,7 +894,7 @@ int cnd_broadcast(cnd_t *cond)
 		success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
 		if (success) {
 			if (cnd->wait_count) {
-				success = ResetEvent(cnd->broadcast_done_event) && SetEvent(cnd->broadcast_event);
+				success = SetEvent(cnd->broadcast_event);
 			}
 			if (!ReleaseMutex(cnd->mutex)) {
 				success = 0;
@@ -947,15 +941,7 @@ static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned l
 			abort();
 		}
 		--cnd->wait_count;
-		if (cnd->wait_count) {
-			if (wait_status == WAIT_OBJECT_0 + 1 /* broadcast_event */) {
-				if (SignalObjectAndWait(cnd->mutex, cnd->broadcast_done_event, INFINITE, 0) != WAIT_OBJECT_0) {
-					abort();
-				}
-			} else if (!ReleaseMutex(cnd->mutex)) {
-				abort();
-			}
-		} else {
+		if (!cnd->wait_count) {
 			do {
 				wait_status_2 = WaitForSingleObject(cnd->signal_sema, 0);
 			} while (wait_status_2 == WAIT_OBJECT_0);
@@ -966,14 +952,9 @@ static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned l
 			if (!ResetEvent(cnd->broadcast_event)) {
 				abort();
 			}
-
-			if (!SetEvent(cnd->broadcast_done_event)) {
-				abort();
-			}
-
-			if (!ReleaseMutex(cnd->mutex)) {
-				abort();
-			}
+		}
+		if (!ReleaseMutex(cnd->mutex)) {
+			abort();
 		}
 
 		res = thrd_success;
