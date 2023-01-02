@@ -643,7 +643,7 @@ static int _c11threads_win32_sleep_common(long long file_time_in)
 		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
 	}
 
-	if (WaitForSingleObject(timer, INFINITE) == WAIT_FAILED) {
+	if (WaitForSingleObject(timer, INFINITE) != WAIT_OBJECT_0) {
 		error = GetLastError();
 		CloseHandle(timer);
 		return error > 1 ? -(long)error : -ERROR_INTERNAL_ERROR;
@@ -862,10 +862,18 @@ int cnd_signal(cnd_t *cond)
 	} else {
 		struct _c11threads_win32_cnd_t *cnd;
 		int success;
+		unsigned long wait_status;
 
 		cnd = *cond;
 
-		success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
+		success = 0;
+		wait_status = WaitForSingleObject(cnd->mutex, INFINITE);
+		if (wait_status == WAIT_OBJECT_0) {
+			success = 1;
+		} else if (wait_status == WAIT_ABANDONED) {
+			abort();
+		}
+
 		if (success) {
 			if (cnd->wait_count) {
 				success = ReleaseSemaphore(cnd->signal_sema, 1, NULL) || GetLastError() == ERROR_TOO_MANY_POSTS;
@@ -888,10 +896,18 @@ int cnd_broadcast(cnd_t *cond)
 	} else {
 		struct _c11threads_win32_cnd_t *cnd;
 		int success;
+		unsigned long wait_status;
 
 		cnd = *cond;
 
-		success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
+		success = 0;
+		wait_status = WaitForSingleObject(cnd->mutex, INFINITE);
+		if (wait_status == WAIT_OBJECT_0) {
+			success = 1;
+		} else if (wait_status == WAIT_ABANDONED) {
+			abort();
+		}
+
 		if (success) {
 			if (cnd->wait_count) {
 				success = SetEvent(cnd->broadcast_event);
@@ -926,7 +942,10 @@ static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned l
 
 		cnd = *cond;
 
-		if (WaitForSingleObject(cnd->mutex, INFINITE) != WAIT_OBJECT_0) {
+		wait_status = WaitForSingleObject(cnd->mutex, INFINITE);
+		if (wait_status == WAIT_ABANDONED) {
+			abort();
+		} else if (wait_status != WAIT_OBJECT_0) {
 			return thrd_error;
 		}
 		LeaveCriticalSection((PCRITICAL_SECTION)mtx);
