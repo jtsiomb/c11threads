@@ -31,6 +31,9 @@ Main project site: https://github.com/jtsiomb/c11threads
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+#define _WIN32_WINNT_VISTA 0x0600
+#define THREAD_QUERY_LIMITED_INFORMATION (0x0800)
+
 
 /* ---- library ---- */
 
@@ -47,22 +50,30 @@ struct _c11threads_win32_tss_dtor_entry_t {
 };
 
 static once_flag _c11threads_win32_initialized = ONCE_FLAG_INIT;
+static unsigned short _c11threads_win32_winver;
 static CRITICAL_SECTION _c11threads_win32_thrd_list_critical_section;
 static struct _c11threads_win32_thrd_entry_t *_c11threads_win32_thrd_list = NULL;
 static CRITICAL_SECTION _c11threads_win32_tss_dtor_list_critical_section;
 static struct _c11threads_win32_tss_dtor_entry_t *_c11threads_win32_tss_dtor_list = NULL;
 
+#ifdef _MSC_VER
+#pragma warning(push)
+/* Warning C4996: 'GetVersion': was declared deprecated */
+/* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
+/* Warning C28159: Consider using 'IsWindows*' instead of 'GetVersion'. Reason: Deprecated. Use VerifyVersionInfo* or IsWindows* macros from VersionHelpers. */
+#pragma warning(disable: 4996 28125 28159)
+#endif
 static void _c11threads_win32_init(void)
 {
-#ifdef _MSC_VER
-#pragma warning(suppress: 28125) /* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
-#endif
+	unsigned short os_version;
+	os_version = (unsigned short)GetVersion(); /* Keep in mind: Maximum version for unmanifested apps is Windows 8 (0x0602). */
+	_c11threads_win32_winver = (os_version << 8) | (os_version >> 8);
 	InitializeCriticalSection(&_c11threads_win32_thrd_list_critical_section);
-#ifdef _MSC_VER
-#pragma warning(suppress: 28125) /* Warning C28125: The function 'InitializeCriticalSection' must be called from within a try/except block. */
-#endif
 	InitializeCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 static void _c11threads_win32_ensure_initialized(void)
 {
@@ -106,6 +117,12 @@ void c11threads_win32_destroy(void)
 }
 
 /* ---- utilities ---- */
+
+static unsigned short _c11threads_win32_util_get_winver()
+{
+	_c11threads_win32_ensure_initialized();
+	return _c11threads_win32_winver;
+}
 
 static _Bool _c11threads_win32_util_is_timespec32_valid(const struct _c11threads_win32_timespec32_t *ts)
 {
@@ -344,11 +361,13 @@ static _Bool _c11threads_win32_thrd_register(thrd_t thrd, HANDLE h)
 	return 1;
 }
 
-static _Bool _c11threads_win32_thrd_deregister(thrd_t thrd)
+static void *_c11threads_win32_thrd_pop_entry(thrd_t thrd)
 {
+	void *h;
 	struct _c11threads_win32_thrd_entry_t *prev;
 	struct _c11threads_win32_thrd_entry_t *curr;
 
+	h = NULL;
 	prev = NULL;
 
 	_c11threads_win32_ensure_initialized();
@@ -361,6 +380,8 @@ static _Bool _c11threads_win32_thrd_deregister(thrd_t thrd)
 			} else {
 				_c11threads_win32_thrd_list = curr->next;
 			}
+			h = curr->h;
+			free(curr);
 			break;
 		}
 		prev = curr;
@@ -368,12 +389,8 @@ static _Bool _c11threads_win32_thrd_deregister(thrd_t thrd)
 	}
 	LeaveCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 
-	assert(curr);
-	if (curr) {
-		CloseHandle(curr->h);
-		free(curr);
-	}
-	return !!curr;
+	assert(h);
+	return h;
 }
 
 static void _c11threads_win32_thrd_run_tss_dtors(void)
@@ -421,12 +438,18 @@ static void _c11threads_win32_thrd_run_tss_dtors(void)
 
 int c11threads_win32_thrd_self_register(void)
 {
+	unsigned long desired_access;
 	void *process;
 	void *thread;
 
+	desired_access = SYNCHRONIZE | THREAD_QUERY_INFORMATION;
+	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+		desired_access = SYNCHRONIZE | THREAD_QUERY_LIMITED_INFORMATION;
+	}
+
 	process = GetCurrentProcess();
 	thread = GetCurrentThread();
-	if (!DuplicateHandle(process, thread, process, &thread, STANDARD_RIGHTS_REQUIRED, 0, 0)) {
+	if (!DuplicateHandle(process, thread, process, &thread, desired_access, 0, 0)) {
 		return thrd_error;
 	}
 	if (!_c11threads_win32_thrd_register(GetCurrentThreadId(), thread)) {
@@ -438,9 +461,15 @@ int c11threads_win32_thrd_self_register(void)
 
 int c11threads_win32_thrd_register(unsigned long win32_thread_id)
 {
+	unsigned long desired_access;
 	void *h;
 
-	h = OpenThread(STANDARD_RIGHTS_REQUIRED, 0, win32_thread_id);
+	desired_access = SYNCHRONIZE | THREAD_QUERY_INFORMATION;
+	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+		desired_access = SYNCHRONIZE | THREAD_QUERY_LIMITED_INFORMATION;
+	}
+
+	h = OpenThread(desired_access, 0, win32_thread_id);
 	if (!h) {
 		return thrd_error;
 	}
@@ -525,15 +554,14 @@ int thrd_join(thrd_t thr, int *res)
 	int ret;
 	void *h;
 
-	ret = thrd_success;
-	h = OpenThread(SYNCHRONIZE | THREAD_QUERY_INFORMATION, 0, thr);
+	ret = thrd_error;
+	h = _c11threads_win32_thrd_pop_entry(thr);
 	if (h) {
-		if (WaitForSingleObject(h, INFINITE) == WAIT_FAILED || (res && !GetExitCodeThread(h, (unsigned long*)res))) {
-			ret = thrd_error;
+		if (WaitForSingleObject(h, INFINITE) == WAIT_OBJECT_0 && (!res || GetExitCodeThread(h, (unsigned long*)res))) {
+			ret = thrd_success;
 		}
 
 		CloseHandle(h);
-		_c11threads_win32_thrd_deregister(thr);
 	}
 
 	return ret;
@@ -541,7 +569,9 @@ int thrd_join(thrd_t thr, int *res)
 
 int thrd_detach(thrd_t thr)
 {
-	return _c11threads_win32_thrd_deregister(thr) ? thrd_success : thrd_error;
+	void *h;
+	h = _c11threads_win32_thrd_pop_entry(thr);
+	return h && CloseHandle(h) ? thrd_success : thrd_error;
 }
 
 thrd_t thrd_current(void)
@@ -725,7 +755,7 @@ int mtx_unlock(mtx_t *mtx)
 
 /* ---- condition variables ---- */
 
-#if _WIN32_WINNT >= 0x0600 /* Windows Vista */
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
 int cnd_init(cnd_t *cond)
 {
 	InitializeConditionVariable((PCONDITION_VARIABLE)cond);
@@ -1092,7 +1122,7 @@ void *tss_get(tss_t key)
 
 /* ---- misc ---- */
 
-#if _WIN32_WINNT >= 0x0600 /* Windows Vista */
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
 static int __stdcall _c11threads_win32_call_once_thunk(INIT_ONCE *init_once, void (*func)(void), void **context)
 {
 	(void)init_once;
@@ -1108,11 +1138,12 @@ void call_once(once_flag *flag, void (*func)(void))
 #else
 void call_once(once_flag *flag, void (*func)(void))
 {
-	if (InterlockedCompareExchangePointerAcquire(flag, (void*)1, (void*)0) == (void*)0) {
-		(func)();
-		InterlockedExchangePointer(flag, (void*)2);
-	} else {
-		while (*flag == (void*)1) {
+	if (InterlockedCompareExchange((long*)flag, 1, 0) == 0) {
+		func();
+		InterlockedExchange((long*)flag, 2);
+	}
+	else {
+		while (*(volatile long*)flag == 1) {
 			Sleep(0);
 		}
 	}
