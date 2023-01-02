@@ -38,11 +38,11 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 /* ---- library ---- */
 
-typedef void (__stdcall *_c11threads_win32_InitializeConditionVariable_t)(PCONDITION_VARIABLE);
-typedef void (__stdcall *_c11threads_win32_WakeConditionVariable_t)(PCONDITION_VARIABLE);
-typedef void (__stdcall *_c11threads_win32_WakeAllConditionVariable_t)(PCONDITION_VARIABLE);
-typedef int (__stdcall *_c11threads_win32_SleepConditionVariableCS_t)(PCONDITION_VARIABLE, PCRITICAL_SECTION, unsigned long);
-typedef int (__stdcall *_c11threads_win32_InitOnceExecuteOnce_t)(PINIT_ONCE, PINIT_ONCE_FN, void*, void**);
+typedef void (__stdcall *_c11threads_win32_InitializeConditionVariable_t)(void*);
+typedef void (__stdcall *_c11threads_win32_WakeConditionVariable_t)(void*);
+typedef void (__stdcall *_c11threads_win32_WakeAllConditionVariable_t)(void*);
+typedef int (__stdcall *_c11threads_win32_SleepConditionVariableCS_t)(void*, PCRITICAL_SECTION, unsigned long);
+typedef int (__stdcall *_c11threads_win32_InitOnceExecuteOnce_t)(void*, const void*, void*, void**);
 
 struct _c11threads_win32_thrd_entry_t {
 	struct _c11threads_win32_thrd_entry_t *next;
@@ -813,7 +813,7 @@ struct _c11threads_win32_cnd_t {
 int cnd_init(cnd_t *cond)
 {
 	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
-		_c11threads_win32_InitializeConditionVariable((PCONDITION_VARIABLE)cond);
+		_c11threads_win32_InitializeConditionVariable(cond);
 		return thrd_success;
 	} else {
 		struct _c11threads_win32_cnd_t *cnd;
@@ -864,7 +864,7 @@ void cnd_destroy(cnd_t *cond)
 int cnd_signal(cnd_t *cond)
 {
 	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
-		_c11threads_win32_WakeConditionVariable((PCONDITION_VARIABLE)cond);
+		_c11threads_win32_WakeConditionVariable(cond);
 		return thrd_success;
 	} else {
 		struct _c11threads_win32_cnd_t *cnd;
@@ -889,7 +889,7 @@ int cnd_signal(cnd_t *cond)
 int cnd_broadcast(cnd_t *cond)
 {
 	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
-		_c11threads_win32_WakeAllConditionVariable((PCONDITION_VARIABLE)cond);
+		_c11threads_win32_WakeAllConditionVariable(cond);
 		return thrd_success;
 	} else {
 		struct _c11threads_win32_cnd_t *cnd;
@@ -914,7 +914,7 @@ int cnd_broadcast(cnd_t *cond)
 static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, _Bool clamped)
 {
 	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
-		if (_c11threads_win32_SleepConditionVariableCS((PCONDITION_VARIABLE)cond, (PCRITICAL_SECTION)mtx, wait_time)) {
+		if (_c11threads_win32_SleepConditionVariableCS(cond, (PCRITICAL_SECTION)mtx, wait_time)) {
 			return thrd_success;
 		}
 
@@ -1117,7 +1117,7 @@ void *tss_get(tss_t key)
 
 /* ---- misc ---- */
 
-static int __stdcall _c11threads_win32_call_once_thunk(INIT_ONCE *init_once, void (*func)(void), void **context)
+static int __stdcall _c11threads_win32_call_once_thunk(void *init_once, void (*func)(void), void **context)
 {
 	(void)init_once;
 	(void)context;
@@ -1128,7 +1128,7 @@ static int __stdcall _c11threads_win32_call_once_thunk(INIT_ONCE *init_once, voi
 void call_once(once_flag *flag, void (*func)(void))
 {
 	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
-		_c11threads_win32_InitOnceExecuteOnce((PINIT_ONCE)flag, (PINIT_ONCE_FN)_c11threads_win32_call_once_thunk, (void*)func, NULL);
+		_c11threads_win32_InitOnceExecuteOnce((void*)flag, (void*)_c11threads_win32_call_once_thunk, (void*)func, NULL);
 	} else {
 		if (InterlockedCompareExchange((long*)flag, 1, 0) == 0) {
 			func();
