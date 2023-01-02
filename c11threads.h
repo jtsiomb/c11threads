@@ -76,6 +76,21 @@ Main project site: https://github.com/jtsiomb/c11threads
 #define C11THREADS_MAYBE_STATIC_INLINE static C11THREADS_MAYBE_INLINE
 #endif
 
+#ifdef _MSC_VER
+#define C11THREADS_MSVC_NORETURN __declspec(noreturn)
+#define C11THREADS_GNUC_NORETURN
+#elif defined(__GNUC__)
+#define C11THREADS_MSVC_NORETURN
+#if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 5)
+#define C11THREADS_GNUC_NORETURN __attribute__((noreturn))
+#else
+#define C11THREADS_GNUC_NORETURN
+#endif
+#else
+#define C11THREADS_MSVC_NORETURN
+#define C11THREADS_GNUC_NORETURN
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -146,7 +161,7 @@ enum {
 
 C11THREADS_MAYBE_STATIC_INLINE int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
 /* Win32: Threads not created with thrd_create() need to call this to clean up TSS. */
-C11THREADS_MAYBE_STATIC_INLINE void thrd_exit(int res);
+C11THREADS_MSVC_NORETURN C11THREADS_MAYBE_STATIC_INLINE void thrd_exit(int res) C11THREADS_GNUC_NORETURN;
 C11THREADS_MAYBE_STATIC_INLINE int thrd_join(thrd_t thr, int *res);
 C11THREADS_MAYBE_STATIC_INLINE int thrd_detach(thrd_t thr);
 C11THREADS_MAYBE_STATIC_INLINE thrd_t thrd_current(void);
