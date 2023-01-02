@@ -28,14 +28,22 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <stdlib.h>
 #include <string.h>
 
+#define WINVER 0x0400 /* Windows NT 4.0 */
+#define _WIN32_WINNT WINVER
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 
 #define _WIN32_WINNT_VISTA 0x0600
 #define THREAD_QUERY_LIMITED_INFORMATION (0x0800)
 
 
 /* ---- library ---- */
+
+typedef void (__stdcall *_c11threads_win32_InitializeConditionVariable_t)(PCONDITION_VARIABLE);
+typedef void (__stdcall *_c11threads_win32_WakeConditionVariable_t)(PCONDITION_VARIABLE);
+typedef void (__stdcall *_c11threads_win32_WakeAllConditionVariable_t)(PCONDITION_VARIABLE);
+typedef int (__stdcall *_c11threads_win32_SleepConditionVariableCS_t)(PCONDITION_VARIABLE, PCRITICAL_SECTION, unsigned long);
+typedef int (__stdcall *_c11threads_win32_InitOnceExecuteOnce_t)(PINIT_ONCE, PINIT_ONCE_FN, void*, void**);
 
 struct _c11threads_win32_thrd_entry_t {
 	struct _c11threads_win32_thrd_entry_t *next;
@@ -49,8 +57,13 @@ struct _c11threads_win32_tss_dtor_entry_t {
 	tss_t key;
 };
 
-static once_flag _c11threads_win32_initialized = ONCE_FLAG_INIT;
+static volatile long _c11threads_win32_initialized = 0;
 static unsigned short _c11threads_win32_winver;
+static _c11threads_win32_InitializeConditionVariable_t _c11threads_win32_InitializeConditionVariable;
+static _c11threads_win32_WakeConditionVariable_t _c11threads_win32_WakeConditionVariable;
+static _c11threads_win32_WakeAllConditionVariable_t _c11threads_win32_WakeAllConditionVariable;
+static _c11threads_win32_SleepConditionVariableCS_t _c11threads_win32_SleepConditionVariableCS;
+static _c11threads_win32_InitOnceExecuteOnce_t _c11threads_win32_InitOnceExecuteOnce;
 static CRITICAL_SECTION _c11threads_win32_thrd_list_critical_section;
 static struct _c11threads_win32_thrd_entry_t *_c11threads_win32_thrd_list = NULL;
 static CRITICAL_SECTION _c11threads_win32_tss_dtor_list_critical_section;
@@ -66,8 +79,35 @@ static struct _c11threads_win32_tss_dtor_entry_t *_c11threads_win32_tss_dtor_lis
 static void _c11threads_win32_init(void)
 {
 	unsigned short os_version;
+	void *kernel32;
 	os_version = (unsigned short)GetVersion(); /* Keep in mind: Maximum version for unmanifested apps is Windows 8 (0x0602). */
 	_c11threads_win32_winver = (os_version << 8) | (os_version >> 8);
+	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
+		kernel32 = GetModuleHandleW(L"kernel32.dll");
+		if (!kernel32) {
+			abort();
+		}
+		_c11threads_win32_InitializeConditionVariable = (_c11threads_win32_InitializeConditionVariable_t)GetProcAddress(kernel32, "InitializeConditionVariable");
+		if (!_c11threads_win32_InitializeConditionVariable) {
+			abort();
+		}
+		_c11threads_win32_WakeConditionVariable = (_c11threads_win32_WakeConditionVariable_t)GetProcAddress(kernel32, "WakeConditionVariable");
+		if (!_c11threads_win32_WakeConditionVariable) {
+			abort();
+		}
+		_c11threads_win32_WakeAllConditionVariable = (_c11threads_win32_WakeAllConditionVariable_t)GetProcAddress(kernel32, "WakeAllConditionVariable");
+		if (!_c11threads_win32_WakeAllConditionVariable) {
+			abort();
+		}
+		_c11threads_win32_SleepConditionVariableCS = (_c11threads_win32_SleepConditionVariableCS_t)GetProcAddress(kernel32, "SleepConditionVariableCS");
+		if (!_c11threads_win32_SleepConditionVariableCS) {
+			abort();
+		}
+		_c11threads_win32_InitOnceExecuteOnce = (_c11threads_win32_InitOnceExecuteOnce_t)GetProcAddress(kernel32, "InitOnceExecuteOnce");
+		if (!_c11threads_win32_InitOnceExecuteOnce) {
+			abort();
+		}
+	}
 	InitializeCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 	InitializeCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 }
@@ -77,7 +117,17 @@ static void _c11threads_win32_init(void)
 
 static void _c11threads_win32_ensure_initialized(void)
 {
-	call_once(&_c11threads_win32_initialized, _c11threads_win32_init);
+	if (InterlockedCompareExchange(&_c11threads_win32_initialized, 1, 0) == 0) {
+		_c11threads_win32_init();
+		InterlockedExchange(&_c11threads_win32_initialized, 2);
+	} else {
+#ifdef _MSC_VER
+#pragma warning(suppress: 28112) /* Warning C28112: A variable (_c11threads_win32_initialized) which is accessed via an Interlocked function must always be accessed via an Interlocked function. */
+#endif
+		while (_c11threads_win32_initialized == 1) {
+			Sleep(0);
+		}
+	}
 }
 
 void c11threads_win32_destroy(void)
@@ -88,8 +138,6 @@ void c11threads_win32_destroy(void)
 	struct _c11threads_win32_tss_dtor_entry_t *tss_dtor_entry_temp;
 
 	if (_c11threads_win32_initialized) {
-		const once_flag once_flag_default = ONCE_FLAG_INIT;
-
 		DeleteCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 		DeleteCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 
@@ -110,7 +158,7 @@ void c11threads_win32_destroy(void)
 			tss_dtor_entry = tss_dtor_entry_temp;
 		}
 
-		memcpy(&_c11threads_win32_initialized, &once_flag_default, sizeof(once_flag));
+		_c11threads_win32_initialized = 0;
 		_c11threads_win32_thrd_list = NULL;
 		_c11threads_win32_tss_dtor_list = NULL;
 	}
@@ -755,86 +803,6 @@ int mtx_unlock(mtx_t *mtx)
 
 /* ---- condition variables ---- */
 
-#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
-int cnd_init(cnd_t *cond)
-{
-	InitializeConditionVariable((PCONDITION_VARIABLE)cond);
-	return thrd_success;
-}
-
-void cnd_destroy(cnd_t *cond)
-{
-	(void)cond;
-}
-
-int cnd_signal(cnd_t *cond)
-{
-	WakeConditionVariable((PCONDITION_VARIABLE)cond);
-	return thrd_success;
-}
-
-int cnd_broadcast(cnd_t *cond)
-{
-	WakeAllConditionVariable((PCONDITION_VARIABLE)cond);
-	return thrd_success;
-}
-
-int cnd_wait(cnd_t *cond, mtx_t *mtx)
-{
-	return SleepConditionVariableCS((PCONDITION_VARIABLE)cond, (PCRITICAL_SECTION)mtx, INFINITE) ? thrd_success : thrd_error;
-}
-
-int _c11threads_win32_cnd_timedwait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, _Bool clamped)
-{
-	if (SleepConditionVariableCS((PCONDITION_VARIABLE)cond, (PCRITICAL_SECTION)mtx, wait_time)) {
-		return thrd_success;
-	}
-
-	if (GetLastError() == ERROR_TIMEOUT) {
-		return clamped ? thrd_success : thrd_timedout;
-	}
-
-	return thrd_error;
-}
-
-int _c11threads_win32_cnd_timedwait32(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec32_t *ts)
-{
-	struct _c11threads_win32_timespec32_t current_time;
-	unsigned long wait_time;
-	_Bool clamped;
-
-	if (!_c11threads_win32_util_is_timespec32_valid(ts)) {
-		return thrd_error;
-	}
-
-	if (!_c11threads_win32_timespec32_get(&current_time, TIME_UTC)) {
-		return thrd_error;
-	}
-
-	wait_time = _c11threads_win32_util_timepoint_to_millisecond_timespan32(&current_time, ts, &clamped);
-
-	return _c11threads_win32_cnd_timedwait_common(cond, mtx, wait_time, clamped);
-}
-
-int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec64_t *ts)
-{
-	struct _c11threads_win32_timespec64_t current_time;
-	unsigned long wait_time;
-	_Bool clamped;
-
-	if (!_c11threads_win32_util_is_timespec64_valid(ts)) {
-		return thrd_error;
-	}
-
-	if (!_c11threads_win32_timespec64_get(&current_time, TIME_UTC)) {
-		return thrd_error;
-	}
-
-	wait_time = _c11threads_win32_util_timepoint_to_millisecond_timespan64(&current_time, ts, &clamped);
-
-	return _c11threads_win32_cnd_timedwait_common(cond, mtx, wait_time, clamped);
-}
-#else
 struct _c11threads_win32_cnd_t {
 	void *mutex;
 	void *signal_sema;
@@ -845,152 +813,181 @@ struct _c11threads_win32_cnd_t {
 
 int cnd_init(cnd_t *cond)
 {
-	struct _c11threads_win32_cnd_t *cnd;
+	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+		_c11threads_win32_InitializeConditionVariable((PCONDITION_VARIABLE)cond);
+		return thrd_success;
+	} else {
+		struct _c11threads_win32_cnd_t *cnd;
 
-	cnd = malloc(sizeof(*cnd));
-	if (!cnd) {
-		return thrd_nomem;
-	}
-
-	cnd->mutex = CreateMutexW(NULL, 0, NULL);
-	if (cnd->mutex) {
-		cnd->signal_sema = CreateSemaphoreW(NULL, 0, 0x7fffffff, NULL);
-		if (cnd->signal_sema) {
-			cnd->broadcast_event = CreateEventW(NULL, 1, 0, NULL);
-			if (cnd->broadcast_event) {
-				cnd->broadcast_done_event = CreateEventW(NULL, 1, 0, NULL);
-				if (cnd->broadcast_done_event) {
-					cnd->wait_count = 0;
-					*cond = cnd;
-					return thrd_success;
-				}
-				CloseHandle(cnd->broadcast_done_event);
-			}
-			CloseHandle(cnd->signal_sema);
+		cnd = malloc(sizeof(*cnd));
+		if (!cnd) {
+			return thrd_nomem;
 		}
-		CloseHandle(cnd->mutex);
-	}
 
-	free(cnd);
-	return thrd_error;
+		cnd->mutex = CreateMutexW(NULL, 0, NULL);
+		if (cnd->mutex) {
+			cnd->signal_sema = CreateSemaphoreW(NULL, 0, 0x7fffffff, NULL);
+			if (cnd->signal_sema) {
+				cnd->broadcast_event = CreateEventW(NULL, 1, 0, NULL);
+				if (cnd->broadcast_event) {
+					cnd->broadcast_done_event = CreateEventW(NULL, 1, 0, NULL);
+					if (cnd->broadcast_done_event) {
+						cnd->wait_count = 0;
+						*cond = cnd;
+						return thrd_success;
+					}
+					CloseHandle(cnd->broadcast_done_event);
+				}
+				CloseHandle(cnd->signal_sema);
+			}
+			CloseHandle(cnd->mutex);
+		}
+
+		free(cnd);
+		return thrd_error;
+	}
 }
 
 void cnd_destroy(cnd_t *cond)
 {
-	struct _c11threads_win32_cnd_t *cnd;
-	cnd = *cond;
-	assert(!cnd->wait_count);
-	CloseHandle(cnd->mutex);
-	CloseHandle(cnd->signal_sema);
-	CloseHandle(cnd->broadcast_event);
-	CloseHandle(cnd->broadcast_done_event);
-	free(cnd);
+	if (_c11threads_win32_util_get_winver() < _WIN32_WINNT_VISTA) {
+		struct _c11threads_win32_cnd_t *cnd;
+		cnd = *cond;
+		assert(!cnd->wait_count);
+		CloseHandle(cnd->mutex);
+		CloseHandle(cnd->signal_sema);
+		CloseHandle(cnd->broadcast_event);
+		CloseHandle(cnd->broadcast_done_event);
+		free(cnd);
+	}
 }
 
 int cnd_signal(cnd_t *cond)
 {
-	struct _c11threads_win32_cnd_t *cnd;
-	_Bool success;
+	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+		_c11threads_win32_WakeConditionVariable((PCONDITION_VARIABLE)cond);
+		return thrd_success;
+	} else {
+		struct _c11threads_win32_cnd_t *cnd;
+		_Bool success;
 
-	cnd = *cond;
+		cnd = *cond;
 
-	success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
-	if (success) {
-		if (cnd->wait_count) {
-			success = ReleaseSemaphore(cnd->signal_sema, 1, NULL) || GetLastError() == ERROR_TOO_MANY_POSTS;
+		success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
+		if (success) {
+			if (cnd->wait_count) {
+				success = ReleaseSemaphore(cnd->signal_sema, 1, NULL) || GetLastError() == ERROR_TOO_MANY_POSTS;
+			}
+			if (!ReleaseMutex(cnd->mutex)) {
+				success = 0;
+			}
 		}
-		if (!ReleaseMutex(cnd->mutex)) {
-			success = 0;
-		}
+
+		return success ? thrd_success : thrd_error;
 	}
-
-	return success ? thrd_success : thrd_error;
 }
 
 int cnd_broadcast(cnd_t *cond)
 {
-	struct _c11threads_win32_cnd_t *cnd;
-	_Bool success;
+	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+		_c11threads_win32_WakeAllConditionVariable((PCONDITION_VARIABLE)cond);
+		return thrd_success;
+	} else {
+		struct _c11threads_win32_cnd_t *cnd;
+		_Bool success;
 
-	cnd = *cond;
+		cnd = *cond;
 
-	success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
-	if (success) {
-		if (cnd->wait_count) {
-			success = ResetEvent(cnd->broadcast_done_event) && SetEvent(cnd->broadcast_event);
+		success = WaitForSingleObject(cnd->mutex, INFINITE) == WAIT_OBJECT_0;
+		if (success) {
+			if (cnd->wait_count) {
+				success = ResetEvent(cnd->broadcast_done_event) && SetEvent(cnd->broadcast_event);
+			}
+			if (!ReleaseMutex(cnd->mutex)) {
+				success = 0;
+			}
 		}
-		if (!ReleaseMutex(cnd->mutex)) {
-			success = 0;
-		}
+
+		return success ? thrd_success : thrd_error;
 	}
-
-	return success ? thrd_success : thrd_error;
 }
 
-int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, _Bool clamped)
+static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, _Bool clamped)
 {
-	struct _c11threads_win32_cnd_t *cnd;
-	unsigned long wait_status;
-	unsigned long wait_status_2;
-	int res;
+	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+		if (_c11threads_win32_SleepConditionVariableCS((PCONDITION_VARIABLE)cond, (PCRITICAL_SECTION)mtx, wait_time)) {
+			return thrd_success;
+		}
 
-	cnd = *cond;
+		if (GetLastError() == ERROR_TIMEOUT) {
+			return clamped ? thrd_success : thrd_timedout;
+		}
 
-	if (WaitForSingleObject(cnd->mutex, INFINITE) != WAIT_OBJECT_0) {
 		return thrd_error;
-	}
-	LeaveCriticalSection((PCRITICAL_SECTION)mtx);
-	++cnd->wait_count;
-	if (!ReleaseMutex(cnd->mutex)) {
-		abort();
-	}
-
-	wait_status = WaitForMultipleObjects(2, &cnd->signal_sema /* and cnd->broadcast_event */, 0, wait_time);
-
-	if (WaitForSingleObject(cnd->mutex, INFINITE) != WAIT_OBJECT_0) {
-		abort();
-	}
-	--cnd->wait_count;
-	if (cnd->wait_count) {
-		if (wait_status == WAIT_OBJECT_0 + 1 /* broadcast_event */) {
-			if (SignalObjectAndWait(cnd->mutex, cnd->broadcast_done_event, INFINITE, 0) != WAIT_OBJECT_0) {
-				abort();
-			}
-		} else if (!ReleaseMutex(cnd->mutex)) {
-			abort();
-		}
 	} else {
-		do {
-			wait_status_2 = WaitForSingleObject(cnd->signal_sema, 0);
-		} while (wait_status_2 == WAIT_OBJECT_0);
-		if (wait_status_2 != WAIT_TIMEOUT) {
-			abort();
-		}
+		struct _c11threads_win32_cnd_t *cnd;
+		unsigned long wait_status;
+		unsigned long wait_status_2;
+		int res;
 
-		if (!ResetEvent(cnd->broadcast_event)) {
-			abort();
-		}
+		cnd = *cond;
 
-		if (!SetEvent(cnd->broadcast_done_event)) {
-			abort();
+		if (WaitForSingleObject(cnd->mutex, INFINITE) != WAIT_OBJECT_0) {
+			return thrd_error;
 		}
-
+		LeaveCriticalSection((PCRITICAL_SECTION)mtx);
+		++cnd->wait_count;
 		if (!ReleaseMutex(cnd->mutex)) {
 			abort();
 		}
-	}
 
-	res = thrd_success;
-	if (wait_status == WAIT_TIMEOUT) {
-		if (!clamped) {
-			res = thrd_timedout;
+		wait_status = WaitForMultipleObjects(2, &cnd->signal_sema /* and cnd->broadcast_event */, 0, wait_time);
+
+		if (WaitForSingleObject(cnd->mutex, INFINITE) != WAIT_OBJECT_0) {
+			abort();
 		}
-	} else if (wait_status != WAIT_OBJECT_0 && wait_status != WAIT_OBJECT_0 + 1) {
-		res = thrd_error;
-	}
+		--cnd->wait_count;
+		if (cnd->wait_count) {
+			if (wait_status == WAIT_OBJECT_0 + 1 /* broadcast_event */) {
+				if (SignalObjectAndWait(cnd->mutex, cnd->broadcast_done_event, INFINITE, 0) != WAIT_OBJECT_0) {
+					abort();
+				}
+			} else if (!ReleaseMutex(cnd->mutex)) {
+				abort();
+			}
+		} else {
+			do {
+				wait_status_2 = WaitForSingleObject(cnd->signal_sema, 0);
+			} while (wait_status_2 == WAIT_OBJECT_0);
+			if (wait_status_2 != WAIT_TIMEOUT) {
+				abort();
+			}
 
-	EnterCriticalSection((PCRITICAL_SECTION)mtx);
-	return res;
+			if (!ResetEvent(cnd->broadcast_event)) {
+				abort();
+			}
+
+			if (!SetEvent(cnd->broadcast_done_event)) {
+				abort();
+			}
+
+			if (!ReleaseMutex(cnd->mutex)) {
+				abort();
+			}
+		}
+
+		res = thrd_success;
+		if (wait_status == WAIT_TIMEOUT) {
+			if (!clamped) {
+				res = thrd_timedout;
+			}
+		} else if (wait_status != WAIT_OBJECT_0 && wait_status != WAIT_OBJECT_0 + 1) {
+			res = thrd_error;
+		}
+
+		EnterCriticalSection((PCRITICAL_SECTION)mtx);
+		return res;
+	}
 }
 
 int cnd_wait(cnd_t *cond, mtx_t *mtx)
@@ -1035,7 +1032,6 @@ int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11
 
 	return _c11threads_win32_cnd_wait_common(cond, mtx, wait_time, clamped);
 }
-#endif
 
 /* ---- thread-specific data ---- */
 
@@ -1122,7 +1118,6 @@ void *tss_get(tss_t key)
 
 /* ---- misc ---- */
 
-#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
 static int __stdcall _c11threads_win32_call_once_thunk(INIT_ONCE *init_once, void (*func)(void), void **context)
 {
 	(void)init_once;
@@ -1133,21 +1128,18 @@ static int __stdcall _c11threads_win32_call_once_thunk(INIT_ONCE *init_once, voi
 
 void call_once(once_flag *flag, void (*func)(void))
 {
-	InitOnceExecuteOnce((PINIT_ONCE)flag, (PINIT_ONCE_FN)_c11threads_win32_call_once_thunk, (void*)func, NULL);
-}
-#else
-void call_once(once_flag *flag, void (*func)(void))
-{
-	if (InterlockedCompareExchange((long*)flag, 1, 0) == 0) {
-		func();
-		InterlockedExchange((long*)flag, 2);
-	}
-	else {
-		while (*(volatile long*)flag == 1) {
-			Sleep(0);
+	if (_c11threads_win32_util_get_winver() >= _WIN32_WINNT_VISTA) {
+		_c11threads_win32_InitOnceExecuteOnce((PINIT_ONCE)flag, (PINIT_ONCE_FN)_c11threads_win32_call_once_thunk, (void*)func, NULL);
+	} else {
+		if (InterlockedCompareExchange((long*)flag, 1, 0) == 0) {
+			func();
+			InterlockedExchange((long*)flag, 2);
+		} else {
+			while (*(volatile long*)flag == 1) {
+				Sleep(0);
+			}
 		}
 	}
 }
-#endif
 
 #endif
