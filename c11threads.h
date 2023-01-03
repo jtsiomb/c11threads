@@ -395,7 +395,11 @@ struct _c11threads_win32_timespec32_t {
 	long tv_nsec;
 };
 struct _c11threads_win32_timespec64_t {
+#ifdef _MSC_VER
+	__int64 tv_sec;
+#else
 	long long tv_sec;
+#endif
 	long tv_nsec;
 };
 #ifdef _MSC_VER
@@ -407,7 +411,7 @@ struct timespec {
 };
 #else
 struct timespec {
-	long long tv_sec;
+	__int64 tv_sec;
 	long tv_nsec;
 };
 #endif	/* _USE_32BIT_TIME_T */
