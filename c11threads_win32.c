@@ -340,7 +340,7 @@ int _c11threads_win32_timespec32_get(struct _c11threads_win32_timespec32_t *ts, 
 
 	/* Also subtract difference between FILETIME and UNIX time epoch. It's 369 years by the way. */
 	ts->tv_sec = (long)(li.QuadPart / 10000000ULL - 11644473600ULL);
-	ts->tv_nsec = (li.QuadPart % 10000000ULL) * 100ULL;
+	ts->tv_nsec = (long)(li.QuadPart % 10000000ULL) * 100ULL;
 
 	return base;
 }
@@ -361,7 +361,7 @@ int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, 
 
 	/* Also subtract difference between FILETIME and UNIX time epoch. It's 369 years by the way. */
 	ts->tv_sec = li.QuadPart / 10000000ULL - 11644473600ULL;
-	ts->tv_nsec = (li.QuadPart % 10000000ULL) * 100ULL;
+	ts->tv_nsec = (long)(li.QuadPart % 10000000ULL) * 100ULL;
 
 	return base;
 }

@@ -4,5 +4,8 @@
 *.obj
 *.wo
 *.exe
+*.suo
+*.ncb
+*.user
 Debug*/
 Release*/
