@@ -1,2 +1,8 @@
-﻿/test.o
-/test
+﻿*.o
+*.d
+*.swp
+*.obj
+*.wo
+*.exe
+Debug*/
+Release*/

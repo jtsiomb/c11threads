@@ -27,8 +27,12 @@ Main project site: https://github.com/jtsiomb/c11threads
 #include <stddef.h>
 #include <stdlib.h>
 
+#ifndef WINVER
 #define WINVER 0x0400 /* Windows NT 4.0 */
+#endif
+#ifndef _WIN32_WINNT
 #define _WIN32_WINNT WINVER
+#endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
