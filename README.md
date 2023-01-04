@@ -1,4 +1,4 @@
-Trivial C11 threads.h implementation over POSIX threads, and not-so-trivial
+Trivial C11 `threads.h` implementation over POSIX threads, and not-so-trivial
 implementation over Win32 threads.
 
 Rationale
@@ -18,11 +18,12 @@ How to use
 ----------
 
 ### With POSIX threads
-On UNIX systems, or Windows with a 3rd party pthread implementation, c11threads
+
+On UNIX systems, or on Windows with a 3rd party pthreads library, c11threads
 is implemented as a thin wrapper of static inline functions over pthreads.
 
 No installation or compilation necessary; just drop `c11threads.h` into your
-project source tree, and don't forget to link with "-lpthread". On some
+project source tree, and don't forget to link with `-lpthread`. On some
 platforms it might be required to also pass the `-pthread` flag to the compiler.
 
 If your compiler does not support the inline keyword, define `C11THREADS_INLINE`
