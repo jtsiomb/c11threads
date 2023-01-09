@@ -101,6 +101,10 @@ enum {
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
 
+#ifdef C11THREADS_NO_TIMED_MUTEX
+#define C11THREADS_TIMEDLOCK_POLL_INTERVAL 5000000	/* 5 ms */
+#endif
+
 /* types */
 typedef pthread_t thrd_t;
 typedef pthread_mutex_t mtx_t;
