@@ -203,9 +203,6 @@ static C11THREADS_INLINE void mtx_destroy(mtx_t *mtx)
 static C11THREADS_INLINE int mtx_lock(mtx_t *mtx)
 {
 	int res = pthread_mutex_lock(mtx);
-	if(res == EDEADLK) {
-		return thrd_busy;
-	}
 	return res == 0 ? thrd_success : thrd_error;
 }
 
