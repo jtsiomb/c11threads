@@ -35,6 +35,8 @@ static void _c11threads_win32_destroy(void);
 static void _c11threads_win32_thrd_run_tss_dtors(void);
 int __stdcall DllMain(void *instance, unsigned long reason, void *reserved)
 {
+	(void)instance;
+
 	switch (reason) {
 	case DLL_PROCESS_ATTACH:
 		return _c11threads_win32_init();
