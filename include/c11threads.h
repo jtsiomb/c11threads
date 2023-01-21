@@ -467,14 +467,6 @@ void call_once(once_flag *flag, void (*func)(void));
 static C11THREADS_INLINE int timespec_get(struct timespec *ts, int base);
 #endif
 
-/* Special Win32 functions. */
-/* Win32: Free resources associated with this library. */
-void c11threads_win32_destroy(void);
-/* Win32: Register current Win32 thread in c11threads to allow for proper thrd_join(). */
-int c11threads_win32_thrd_self_register(void);
-/* Win32: Register Win32 thread by ID in c11threads to allow for proper thrd_join(). */
-int c11threads_win32_thrd_register(unsigned long win32_thread_id);
-
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable: 4127) /* Warning C4127: conditional expression is constant */

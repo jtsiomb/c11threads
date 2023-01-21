@@ -1,13 +1,6 @@
 /* Test program for c11threads. */
 
-/* Needed for memory leak detection. */
-#ifdef _WIN32
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
-
-#include "c11threads.h"
+#include "include/c11threads.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -53,16 +46,6 @@ int main(void)
 	puts("start call once test");
 	run_call_once_test();
 	puts("end call once test\n");
-
-#if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
-	c11threads_win32_destroy();
-#endif
-
-#ifdef _WIN32
-	if (_CrtDumpMemoryLeaks()) {
-		abort();
-	}
-#endif
 
 	puts("tests finished");
 }

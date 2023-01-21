@@ -14,25 +14,13 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 
-#ifdef _MSC_VER
-/* Map debug malloc and free functions for debug builds. DO NOT CHANGE THE INCLUDE ORDER! */
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
+#include "include/c11threads.h"
 
-#include "c11threads.h"
-
-#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
 
-#ifndef WINVER
-#define WINVER 0x0400 /* Windows NT 4.0 */
-#endif
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT WINVER
-#endif
+#define WINVER _WIN32_WINNT_NT4
+#define _WIN32_WINNT _WIN32_WINNT_NT4
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -41,6 +29,29 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 
 /* ---- library ---- */
+
+static int _c11threads_win32_init(void);
+static void _c11threads_win32_destroy(void);
+static void _c11threads_win32_thrd_run_tss_dtors(void);
+int __stdcall DllMain(void *instance, unsigned long reason, void *reserved)
+{
+	switch (reason) {
+	case DLL_PROCESS_ATTACH:
+		return _c11threads_win32_init();
+
+	case DLL_PROCESS_DETACH:
+		if (reserved) {
+			_c11threads_win32_destroy();
+		}
+		break;
+
+	case DLL_THREAD_DETACH:
+		_c11threads_win32_thrd_run_tss_dtors();
+		break;
+	}
+
+	return 0;
+}
 
 typedef void (__stdcall *_c11threads_win32_InitializeConditionVariable_t)(void*);
 typedef void (__stdcall *_c11threads_win32_WakeConditionVariable_t)(void*);
@@ -60,7 +71,6 @@ struct _c11threads_win32_tss_dtor_entry_t {
 	tss_t key;
 };
 
-static volatile long _c11threads_win32_initialized = 0;
 static unsigned short _c11threads_win32_winver;
 static _c11threads_win32_InitializeConditionVariable_t _c11threads_win32_InitializeConditionVariable;
 static _c11threads_win32_WakeConditionVariable_t _c11threads_win32_WakeConditionVariable;
@@ -79,91 +89,73 @@ static struct _c11threads_win32_tss_dtor_entry_t *_c11threads_win32_tss_dtor_lis
 /* Warning C28159: Consider using 'IsWindows*' instead of 'GetVersion'. Reason: Deprecated. Use VerifyVersionInfo* or IsWindows* macros from VersionHelpers. */
 #pragma warning(disable: 4996 28125 28159)
 #endif
-static void _c11threads_win32_init(void)
+static int _c11threads_win32_init(void)
 {
 	unsigned short os_version;
+
 	os_version = (unsigned short)GetVersion(); /* Keep in mind: Maximum version for unmanifested apps is Windows 8 (0x0602). */
 	_c11threads_win32_winver = (os_version << 8) | (os_version >> 8);
 	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		void *kernel32;
 		kernel32 = GetModuleHandleW(L"kernel32.dll");
 		if (!kernel32) {
-			abort();
+			return 0;
 		}
 		_c11threads_win32_InitializeConditionVariable = (_c11threads_win32_InitializeConditionVariable_t)GetProcAddress(kernel32, "InitializeConditionVariable");
 		if (!_c11threads_win32_InitializeConditionVariable) {
-			abort();
+			return 0;
 		}
 		_c11threads_win32_WakeConditionVariable = (_c11threads_win32_WakeConditionVariable_t)GetProcAddress(kernel32, "WakeConditionVariable");
 		if (!_c11threads_win32_WakeConditionVariable) {
-			abort();
+			return 0;
 		}
 		_c11threads_win32_WakeAllConditionVariable = (_c11threads_win32_WakeAllConditionVariable_t)GetProcAddress(kernel32, "WakeAllConditionVariable");
 		if (!_c11threads_win32_WakeAllConditionVariable) {
-			abort();
+			return 0;
 		}
 		_c11threads_win32_SleepConditionVariableCS = (_c11threads_win32_SleepConditionVariableCS_t)GetProcAddress(kernel32, "SleepConditionVariableCS");
 		if (!_c11threads_win32_SleepConditionVariableCS) {
-			abort();
+			return 0;
 		}
 		_c11threads_win32_InitOnceExecuteOnce = (_c11threads_win32_InitOnceExecuteOnce_t)GetProcAddress(kernel32, "InitOnceExecuteOnce");
 		if (!_c11threads_win32_InitOnceExecuteOnce) {
-			abort();
+			return 0;
 		}
 	}
 	InitializeCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 	InitializeCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
+	return 1;
 }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-static void _c11threads_win32_ensure_initialized(void)
-{
-	if (InterlockedCompareExchange(&_c11threads_win32_initialized, 1, 0) == 0) {
-		_c11threads_win32_init();
-		InterlockedExchange(&_c11threads_win32_initialized, 2);
-	} else {
-#ifdef _MSC_VER
-#pragma warning(suppress: 28112) /* Warning C28112: A variable (_c11threads_win32_initialized) which is accessed via an Interlocked function must always be accessed via an Interlocked function. */
-#endif
-		while (_c11threads_win32_initialized == 1) {
-			Sleep(0);
-		}
-	}
-}
-
-void c11threads_win32_destroy(void)
+static void _c11threads_win32_destroy(void)
 {
 	struct _c11threads_win32_thrd_entry_t *thrd_entry;
 	struct _c11threads_win32_thrd_entry_t *thrd_entry_temp;
 	struct _c11threads_win32_tss_dtor_entry_t *tss_dtor_entry;
 	struct _c11threads_win32_tss_dtor_entry_t *tss_dtor_entry_temp;
 
-	if (_c11threads_win32_initialized) {
-		DeleteCriticalSection(&_c11threads_win32_thrd_list_critical_section);
-		DeleteCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
+	_c11threads_win32_thrd_run_tss_dtors();
 
-		assert(!_c11threads_win32_thrd_list);
-		thrd_entry = _c11threads_win32_thrd_list;
-		while (thrd_entry) {
-			thrd_entry_temp = thrd_entry->next;
-			CloseHandle(thrd_entry->h);
-			free(thrd_entry);
-			thrd_entry = thrd_entry_temp;
-		}
+	DeleteCriticalSection(&_c11threads_win32_thrd_list_critical_section);
+	DeleteCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 
-		assert(!_c11threads_win32_tss_dtor_list);
-		tss_dtor_entry = _c11threads_win32_tss_dtor_list;
-		while (tss_dtor_entry) {
-			tss_dtor_entry_temp = tss_dtor_entry->next;
-			free(tss_dtor_entry);
-			tss_dtor_entry = tss_dtor_entry_temp;
-		}
+	thrd_entry = _c11threads_win32_thrd_list;
+	while (thrd_entry) {
+		thrd_entry_temp = thrd_entry->next;
+		CloseHandle(thrd_entry->h);
+		free(thrd_entry);
+		thrd_entry = thrd_entry_temp;
+	}
 
-		_c11threads_win32_initialized = 0;
-		_c11threads_win32_thrd_list = NULL;
-		_c11threads_win32_tss_dtor_list = NULL;
+	tss_dtor_entry = _c11threads_win32_tss_dtor_list;
+	while (tss_dtor_entry) {
+		tss_dtor_entry_temp = tss_dtor_entry->next;
+		TlsFree(tss_dtor_entry->key);
+		free(tss_dtor_entry);
+		tss_dtor_entry = tss_dtor_entry_temp;
 	}
 }
 
@@ -379,33 +371,6 @@ int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, 
 
 /* ---- thread management ---- */
 
-static int _c11threads_win32_thrd_register(thrd_t thrd, HANDLE h)
-{
-	struct _c11threads_win32_thrd_entry_t *thread_entry;
-	struct _c11threads_win32_thrd_entry_t **curr;
-
-	thread_entry = malloc(sizeof(*thread_entry));
-	if (!thread_entry) {
-		return 0;
-	}
-
-	thread_entry->thrd = thrd;
-	thread_entry->h = h;
-	thread_entry->next = NULL;
-
-	_c11threads_win32_ensure_initialized();
-	EnterCriticalSection(&_c11threads_win32_thrd_list_critical_section);
-	curr = &_c11threads_win32_thrd_list;
-	while (*curr) {
-		assert((*curr)->thrd != thrd);
-		curr = &(*curr)->next;
-	}
-	*curr = thread_entry;
-	LeaveCriticalSection(&_c11threads_win32_thrd_list_critical_section);
-
-	return 1;
-}
-
 static void *_c11threads_win32_thrd_pop_entry(thrd_t thrd)
 {
 	void *h;
@@ -415,7 +380,6 @@ static void *_c11threads_win32_thrd_pop_entry(thrd_t thrd)
 	h = NULL;
 	prev = NULL;
 
-	_c11threads_win32_ensure_initialized();
 	EnterCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 	curr = _c11threads_win32_thrd_list;
 	while (curr) {
@@ -434,7 +398,6 @@ static void *_c11threads_win32_thrd_pop_entry(thrd_t thrd)
 	}
 	LeaveCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 
-	assert(h);
 	return h;
 }
 
@@ -447,7 +410,6 @@ static void _c11threads_win32_thrd_run_tss_dtors(void)
 	struct _c11threads_win32_tss_dtor_entry_t *temp;
 	void *val;
 
-	_c11threads_win32_ensure_initialized();
 	EnterCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 	ran_dtor = 1;
 	for (i = 0; i < TSS_DTOR_ITERATIONS && ran_dtor; ++i) {
@@ -481,55 +443,6 @@ static void _c11threads_win32_thrd_run_tss_dtors(void)
 	LeaveCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 }
 
-int c11threads_win32_thrd_self_register(void)
-{
-	unsigned long desired_access;
-	void *process;
-	void *thread;
-
-	desired_access = SYNCHRONIZE | THREAD_QUERY_INFORMATION;
-	_c11threads_win32_ensure_initialized();
-	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
-		desired_access = SYNCHRONIZE | THREAD_QUERY_LIMITED_INFORMATION;
-	}
-
-	process = GetCurrentProcess();
-	thread = GetCurrentThread();
-	if (!DuplicateHandle(process, thread, process, &thread, desired_access, 0, 0)) {
-		return thrd_error;
-	}
-	if (!_c11threads_win32_thrd_register(GetCurrentThreadId(), thread)) {
-		CloseHandle(thread);
-		return thrd_nomem;
-	}
-	return thrd_success;
-}
-
-int c11threads_win32_thrd_register(unsigned long win32_thread_id)
-{
-	/* XXX temporary hack to make this build on MSVC6. Investigate further */
-#ifdef _PROCESSTHREADSAPI_H_
-	unsigned long desired_access;
-	void *h;
-
-	desired_access = SYNCHRONIZE | THREAD_QUERY_INFORMATION;
-	_c11threads_win32_ensure_initialized();
-	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
-		desired_access = SYNCHRONIZE | THREAD_QUERY_LIMITED_INFORMATION;
-	}
-
-	h = OpenThread(desired_access, 0, win32_thread_id);
-	if (!h) {
-		return thrd_error;
-	}
-	if (!_c11threads_win32_thrd_register(win32_thread_id, h)) {
-		CloseHandle(h);
-		return thrd_nomem;
-	}
-#endif
-	return thrd_success;
-}
-
 struct _c11threads_win32_thrd_start_thunk_parameters_t {
 	thrd_start_t func;
 	void *arg;
@@ -537,13 +450,10 @@ struct _c11threads_win32_thrd_start_thunk_parameters_t {
 
 static int __stdcall _c11threads_win32_thrd_start_thunk(struct _c11threads_win32_thrd_start_thunk_parameters_t *start_parameters)
 {
-	int res;
 	struct _c11threads_win32_thrd_start_thunk_parameters_t local_start_params;
 	local_start_params = *start_parameters;
 	free(start_parameters);
-	res = local_start_params.func(local_start_params.arg);
-	_c11threads_win32_thrd_run_tss_dtors();
-	return res;
+	return local_start_params.func(local_start_params.arg);
 }
 
 int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
@@ -569,9 +479,11 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 
 	thread_entry->next = NULL;
 
+	EnterCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 	h = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)_c11threads_win32_thrd_start_thunk, thread_start_params, 0, thr);
 	if (!h) {
 		unsigned long error;
+		LeaveCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 		error = GetLastError();
 		free(thread_start_params);
 		free(thread_entry);
@@ -581,8 +493,6 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 	thread_entry->h = h;
 	thread_entry->thrd = *thr;
 
-	_c11threads_win32_ensure_initialized();
-	EnterCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 	curr = &_c11threads_win32_thrd_list;
 	while (*curr) {
 		curr = &(*curr)->next;
@@ -595,7 +505,6 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 
 void thrd_exit(int res)
 {
-	_c11threads_win32_thrd_run_tss_dtors();
 	ExitThread(res);
 }
 
@@ -634,8 +543,6 @@ static int _c11threads_win32_sleep_common(__int64 file_time_in)
 	void *timer;
 	unsigned long error;
 	LARGE_INTEGER due_time;
-
-	assert(file_time_in >= 0);
 
 	timer = CreateWaitableTimerW(NULL, 1, NULL);
 	if (!timer) {
@@ -814,7 +721,6 @@ struct _c11threads_win32_cnd_t {
 
 int cnd_init(cnd_t *cond)
 {
-	_c11threads_win32_ensure_initialized();
 	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		_c11threads_win32_InitializeConditionVariable(cond);
 		return thrd_success;
@@ -848,11 +754,9 @@ int cnd_init(cnd_t *cond)
 
 void cnd_destroy(cnd_t *cond)
 {
-	_c11threads_win32_ensure_initialized();
 	if (_c11threads_win32_winver < _WIN32_WINNT_VISTA) {
 		struct _c11threads_win32_cnd_t *cnd;
 		cnd = *cond;
-		assert(!cnd->wait_count);
 		CloseHandle(cnd->mutex);
 		CloseHandle(cnd->signal_sema);
 		CloseHandle(cnd->broadcast_event);
@@ -862,7 +766,6 @@ void cnd_destroy(cnd_t *cond)
 
 int cnd_signal(cnd_t *cond)
 {
-	_c11threads_win32_ensure_initialized();
 	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		_c11threads_win32_WakeConditionVariable(cond);
 		return thrd_success;
@@ -896,7 +799,6 @@ int cnd_signal(cnd_t *cond)
 
 int cnd_broadcast(cnd_t *cond)
 {
-	_c11threads_win32_ensure_initialized();
 	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		_c11threads_win32_WakeAllConditionVariable(cond);
 		return thrd_success;
@@ -930,7 +832,6 @@ int cnd_broadcast(cnd_t *cond)
 
 static int _c11threads_win32_cnd_wait_common(cnd_t *cond, mtx_t *mtx, unsigned long wait_time, int clamped)
 {
-	_c11threads_win32_ensure_initialized();
 	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 		if (_c11threads_win32_SleepConditionVariableCS(cond, (PCRITICAL_SECTION)mtx, wait_time)) {
 			return thrd_success;
@@ -1055,7 +956,6 @@ static int _c11threads_win32_tss_register(tss_t key, tss_dtor_t dtor) {
 	tss_dtor_entry->dtor = dtor;
 	tss_dtor_entry->next = NULL;
 
-	_c11threads_win32_ensure_initialized();
 	EnterCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 	curr = &_c11threads_win32_tss_dtor_list;
 	while (*curr) {
@@ -1073,7 +973,6 @@ static void _c11threads_win32_tss_deregister(tss_t key) {
 
 	prev = NULL;
 
-	_c11threads_win32_ensure_initialized();
 	EnterCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 	curr = _c11threads_win32_tss_dtor_list;
 	while (curr) {
@@ -1134,7 +1033,6 @@ static int __stdcall _c11threads_win32_call_once_thunk(void *init_once, void (*f
 
 void call_once(once_flag *flag, void (*func)(void))
 {
-	_c11threads_win32_ensure_initialized();
 	if (_c11threads_win32_winver >= _WIN32_WINNT_VISTA) {
 #ifdef _MSC_VER
 #pragma warning(push)

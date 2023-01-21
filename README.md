@@ -34,12 +34,16 @@ If you wish to use the pthreads implementation on Windows, in preference to the
 native win32 one, you need to define `C11THREADS_PTHREAD_WIN32`.
 
 ### With Win32 threads
-To use C11 threads over the Windows threads API, beyond adding `c11threads.h` to
-your project, you also need to compile `c11threads_win32.c` as part of your
-build. Additionally, if you're in a situation where letting c11threads keep
-resources for the duration of the process lifetime is not desirable, you can
-call `c11threads_destroy_win32()` to free them manually at any point, when
-you're done with it.
+
+Simply add the CMake project to your own project or build a shared library from
+`c11threads_win32.c`. Threads need to be created with `thrd_create()` to work
+properly with `thrd_join()` and `thrd_detach()`.
+
+```cmake
+add_subdirectory(path_to_c11threads)
+add_executable(my_program program.c)
+target_link_libraries(my_program c11threads)
+```
 
 License
 -------

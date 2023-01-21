@@ -1,0 +1,33 @@
+project(c11threads)
+cmake_minimum_required(VERSION 2.8.12)
+option(C11THREADS_PTHREAD_WIN32 "Use libpthread on Windows." OFF)
+option(C11THREADS_TESTS "Build c11threads tests." OFF)
+
+if (WIN32 AND NOT C11THREADS_PTHREAD_WIN32)
+	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+	add_library(c11threads SHARED c11threads_win32.c)
+else ()
+	add_library(c11threads INTERFACE)
+endif ()
+
+target_include_directories(c11threads INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+if (C11THREADS_PTHREAD_WIN32)
+	target_compile_definitions(c11threads INTERFACE C11THREADS_PTHREAD_WIN32)
+	set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+	find_package(Threads REQUIRED)
+	if (NOT CMAKE_USE_PTHREADS_INIT)
+		message(FATAL_ERROR "C11THREADS_PTHREAD_WIN32 is on, but libpthread was not found.")
+	endif ()
+	target_link_libraries(c11threads INTERFACE ${CMAKE_THREAD_LIBS_INIT})
+endif ()
+
+if (C11THREADS_TESTS)
+	enable_testing()
+	add_test(NAME c11threads_tests COMMAND c11threads_tests)
+	add_executable(c11threads_tests test.c)
+
+	if (WIN32)
+		target_link_libraries(c11threads_tests c11threads)
+	endif ()
+endif ()
