@@ -9,3 +9,6 @@
 *.user
 Debug*/
 Release*/
+/out
+/CMakeSettings.json
+/.vs
