@@ -350,17 +350,8 @@ static C11THREADS_INLINE int timespec_get(struct timespec *ts, int base)
 #define ONCE_FLAG_INIT		{0}
 #define TSS_DTOR_ITERATIONS	4
 
-#ifdef _MSC_VER
-#if (_MSC_VER < 1900)
-#define C11THREADS_NO_TIMESPEC_GET
-#endif
-#elif defined(__GNUC__)
-/* MinGW with the MSVCRT runtime does not support timespec_get, it's available
- * when using the UCRT environment only.
- */
 #ifndef _UCRT
 #define C11THREADS_NO_TIMESPEC_GET
-#endif
 #endif
 
 #ifdef _MSC_VER
@@ -403,21 +394,19 @@ struct _c11threads_win32_timespec64_t {
 #endif
 	long tv_nsec;
 };
-#ifdef _MSC_VER
-#if _MSC_VER < 1900
+#ifndef _UCRT
 #ifdef _USE_32BIT_TIME_T
 struct timespec {
 	long tv_sec;
 	long tv_nsec;
 };
-#else
+#elif !defined(_USE_32BIT_TIME_T)
 struct timespec {
 	__int64 tv_sec;
 	long tv_nsec;
 };
-#endif	/* _USE_32BIT_TIME_T */
-#endif	/* _MSC_VER < 1900 */
-#endif	/* def _MSC_VER */
+#endif	/* !defined(_USE_32BIT_TIME_T) */
+#endif	/* !defined(_UCRT) */
 
 /* Thread functions. */
 
