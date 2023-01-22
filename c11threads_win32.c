@@ -14,6 +14,8 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 #if defined(_WIN32) && !defined(C11THREADS_PTHREAD_WIN32)
 
+#define C11THREADS_WIN32_EXPORT __declspec(dllexport)
+
 #include "include/c11threads.h"
 
 #include <stddef.h>
@@ -33,7 +35,7 @@ Main project site: https://github.com/jtsiomb/c11threads
 static int _c11threads_win32_init(void);
 static void _c11threads_win32_destroy(void);
 static void _c11threads_win32_thrd_run_tss_dtors(void);
-int __stdcall DllMain(void *instance, unsigned long reason, void *reserved)
+__declspec(dllexport) int __stdcall DllMain(void *instance, unsigned long reason, void *reserved)
 {
 	(void)instance;
 

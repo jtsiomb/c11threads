@@ -4,7 +4,6 @@ option(C11THREADS_PTHREAD_WIN32 "Use libpthread on Windows." OFF)
 option(C11THREADS_TESTS "Build c11threads tests." OFF)
 
 if (WIN32 AND NOT C11THREADS_PTHREAD_WIN32)
-	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 	add_library(c11threads SHARED c11threads_win32.c)
 else ()
 	add_library(c11threads INTERFACE)

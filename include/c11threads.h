@@ -378,6 +378,10 @@ static C11THREADS_INLINE int timespec_get(struct timespec *ts, int base)
 #define C11THREADS_GNUC_NORETURN
 #endif
 
+#ifndef C11THREADS_WIN32_EXPORT
+#define C11THREADS_WIN32_EXPORT __declspec(dllimport)
+#endif
+
 /* types */
 typedef unsigned long thrd_t;
 typedef struct {
@@ -421,44 +425,44 @@ struct timespec {
 
 /* Thread functions. */
 
-int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
+C11THREADS_WIN32_EXPORT int thrd_create(thrd_t *thr, thrd_start_t func, void *arg);
 /* Win32: Threads not created with thrd_create() need to call this to clean up TSS. */
-C11THREADS_MSVC_NORETURN void thrd_exit(int res) C11THREADS_GNUC_NORETURN;
-int thrd_join(thrd_t thr, int *res);
-int thrd_detach(thrd_t thr);
-thrd_t thrd_current(void);
-int thrd_equal(thrd_t a, thrd_t b);
+C11THREADS_WIN32_EXPORT C11THREADS_MSVC_NORETURN void thrd_exit(int res) C11THREADS_GNUC_NORETURN;
+C11THREADS_WIN32_EXPORT int thrd_join(thrd_t thr, int *res);
+C11THREADS_WIN32_EXPORT int thrd_detach(thrd_t thr);
+C11THREADS_WIN32_EXPORT thrd_t thrd_current(void);
+C11THREADS_WIN32_EXPORT int thrd_equal(thrd_t a, thrd_t b);
 static C11THREADS_INLINE int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out);
-void thrd_yield(void);
+C11THREADS_WIN32_EXPORT void thrd_yield(void);
 
 /* Mutex functions. */
 
-int mtx_init(mtx_t *mtx, int type);
-void mtx_destroy(mtx_t *mtx);
-int mtx_lock(mtx_t *mtx);
-int mtx_trylock(mtx_t *mtx);
+C11THREADS_WIN32_EXPORT int mtx_init(mtx_t *mtx, int type);
+C11THREADS_WIN32_EXPORT void mtx_destroy(mtx_t *mtx);
+C11THREADS_WIN32_EXPORT int mtx_lock(mtx_t *mtx);
+C11THREADS_WIN32_EXPORT int mtx_trylock(mtx_t *mtx);
 static C11THREADS_INLINE int mtx_timedlock(mtx_t *mtx, const struct timespec *ts);
-int mtx_unlock(mtx_t *mtx);
+C11THREADS_WIN32_EXPORT int mtx_unlock(mtx_t *mtx);
 
 /* Condition variable functions. */
 
-int cnd_init(cnd_t *cond);
-void cnd_destroy(cnd_t *cond);
-int cnd_signal(cnd_t *cond);
-int cnd_broadcast(cnd_t *cond);
-int cnd_wait(cnd_t *cond, mtx_t *mtx);
+C11THREADS_WIN32_EXPORT int cnd_init(cnd_t *cond);
+C11THREADS_WIN32_EXPORT void cnd_destroy(cnd_t *cond);
+C11THREADS_WIN32_EXPORT int cnd_signal(cnd_t *cond);
+C11THREADS_WIN32_EXPORT int cnd_broadcast(cnd_t *cond);
+C11THREADS_WIN32_EXPORT int cnd_wait(cnd_t *cond, mtx_t *mtx);
 static C11THREADS_INLINE int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts);
 
 /* Thread-specific storage functions. */
 
-int tss_create(tss_t *key, tss_dtor_t dtor);
-void tss_delete(tss_t key);
-int tss_set(tss_t key, void *val);
-void *tss_get(tss_t key);
+C11THREADS_WIN32_EXPORT int tss_create(tss_t *key, tss_dtor_t dtor);
+C11THREADS_WIN32_EXPORT void tss_delete(tss_t key);
+C11THREADS_WIN32_EXPORT int tss_set(tss_t key, void *val);
+C11THREADS_WIN32_EXPORT void *tss_get(tss_t key);
 
 /* One-time callable function. */
 
-void call_once(once_flag *flag, void (*func)(void));
+C11THREADS_WIN32_EXPORT void call_once(once_flag *flag, void (*func)(void));
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
 static C11THREADS_INLINE int timespec_get(struct timespec *ts, int base);
@@ -471,8 +475,8 @@ static C11THREADS_INLINE int timespec_get(struct timespec *ts, int base);
 
 /* ---- thread management ---- */
 
-int _c11threads_win32_thrd_sleep32(const struct _c11threads_win32_timespec32_t *ts_in, struct _c11threads_win32_timespec32_t *rem_out);
-int _c11threads_win32_thrd_sleep64(const struct _c11threads_win32_timespec64_t *ts_in, struct _c11threads_win32_timespec64_t *rem_out);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_thrd_sleep32(const struct _c11threads_win32_timespec32_t *ts_in, struct _c11threads_win32_timespec32_t *rem_out);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_thrd_sleep64(const struct _c11threads_win32_timespec64_t *ts_in, struct _c11threads_win32_timespec64_t *rem_out);
 static C11THREADS_INLINE int thrd_sleep(const struct timespec *ts_in, struct timespec *rem_out)
 {
 	if (sizeof(ts_in->tv_sec) == 4) {
@@ -484,8 +488,8 @@ static C11THREADS_INLINE int thrd_sleep(const struct timespec *ts_in, struct tim
 
 /* ---- mutexes ---- */
 
-int _c11threads_win32_mtx_timedlock32(mtx_t *mtx, const struct _c11threads_win32_timespec32_t *ts);
-int _c11threads_win32_mtx_timedlock64(mtx_t *mtx, const struct _c11threads_win32_timespec64_t *ts);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_mtx_timedlock32(mtx_t *mtx, const struct _c11threads_win32_timespec32_t *ts);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_mtx_timedlock64(mtx_t *mtx, const struct _c11threads_win32_timespec64_t *ts);
 static C11THREADS_INLINE int mtx_timedlock(mtx_t *mtx, const struct timespec *ts)
 {
 	if (sizeof(ts->tv_sec) == 4) {
@@ -497,8 +501,8 @@ static C11THREADS_INLINE int mtx_timedlock(mtx_t *mtx, const struct timespec *ts
 
 /* ---- condition variables ---- */
 
-int _c11threads_win32_cnd_timedwait32(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec32_t *ts);
-int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec64_t *ts);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_cnd_timedwait32(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec32_t *ts);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11threads_win32_timespec64_t *ts);
 static C11THREADS_INLINE int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct timespec *ts)
 {
 	if (sizeof(ts->tv_sec) == 4) {
@@ -511,8 +515,8 @@ static C11THREADS_INLINE int cnd_timedwait(cnd_t *cond, mtx_t *mtx, const struct
 /* ---- misc ---- */
 
 #ifdef C11THREADS_NO_TIMESPEC_GET
-int _c11threads_win32_timespec32_get(struct _c11threads_win32_timespec32_t *ts, int base);
-int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, int base);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_timespec32_get(struct _c11threads_win32_timespec32_t *ts, int base);
+C11THREADS_WIN32_EXPORT int _c11threads_win32_timespec64_get(struct _c11threads_win32_timespec64_t *ts, int base);
 static C11THREADS_INLINE int timespec_get(struct timespec *ts, int base)
 {
 	if (sizeof(ts->tv_sec) == 4) {
