@@ -35,15 +35,10 @@ native win32 one, you need to define `C11THREADS_PTHREAD_WIN32`.
 
 ### With Win32 threads
 
-Simply add the CMake project to your own project or build a shared library from
-`c11threads_win32.c`. Threads need to be created with `thrd_create()` to work
-properly with `thrd_join()` and `thrd_detach()`.
+Build a shared library from `c11threads_win32.c`, link with it, and include
+`c11threads.h`.
 
-```cmake
-add_subdirectory(path_to_c11threads)
-add_executable(my_program program.c)
-target_link_libraries(my_program c11threads)
-```
+You may also reference the provided CMake project if desired.
 
 License
 -------
