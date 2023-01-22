@@ -80,9 +80,9 @@ static _c11threads_win32_WakeAllConditionVariable_t _c11threads_win32_WakeAllCon
 static _c11threads_win32_SleepConditionVariableCS_t _c11threads_win32_SleepConditionVariableCS;
 static _c11threads_win32_InitOnceExecuteOnce_t _c11threads_win32_InitOnceExecuteOnce;
 static CRITICAL_SECTION _c11threads_win32_thrd_list_critical_section;
-static struct _c11threads_win32_thrd_entry_t *_c11threads_win32_thrd_list_head = NULL;
+static struct _c11threads_win32_thrd_entry_t *_c11threads_win32_thrd_list = NULL;
 static CRITICAL_SECTION _c11threads_win32_tss_dtor_list_critical_section;
-static struct _c11threads_win32_tss_dtor_entry_t *_c11threads_win32_tss_dtor_list_head = NULL;
+static struct _c11threads_win32_tss_dtor_entry_t *_c11threads_win32_tss_dtor_list = NULL;
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -144,7 +144,7 @@ static void _c11threads_win32_destroy(void)
 	DeleteCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 	DeleteCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 
-	thrd_entry = _c11threads_win32_thrd_list_head;
+	thrd_entry = _c11threads_win32_thrd_list;
 	while (thrd_entry) {
 		thrd_entry_temp = thrd_entry->next;
 		CloseHandle(thrd_entry->h);
@@ -152,7 +152,7 @@ static void _c11threads_win32_destroy(void)
 		thrd_entry = thrd_entry_temp;
 	}
 
-	tss_dtor_entry = _c11threads_win32_tss_dtor_list_head;
+	tss_dtor_entry = _c11threads_win32_tss_dtor_list;
 	while (tss_dtor_entry) {
 		tss_dtor_entry_temp = tss_dtor_entry->next;
 		TlsFree(tss_dtor_entry->key);
@@ -378,32 +378,28 @@ static void *_c11threads_win32_thrd_pop_entry(thrd_t thrd)
 	void *h;
 	struct _c11threads_win32_thrd_entry_t *prev;
 	struct _c11threads_win32_thrd_entry_t *curr;
-	struct _c11threads_win32_thrd_entry_t *next;
 
 	h = NULL;
 	prev = NULL;
 
 	EnterCriticalSection(&_c11threads_win32_thrd_list_critical_section);
-	curr = _c11threads_win32_thrd_list_head;
-	while (curr)
-	{
+	curr = _c11threads_win32_thrd_list;
+	while (curr) {
 		if (curr->thrd == thrd) {
-			h = curr->h;
-			next = curr->next;
 			if (prev) {
-				prev->next = next;
+				prev->next = curr->next;
 			} else {
-				_c11threads_win32_thrd_list_head = next;
+				_c11threads_win32_thrd_list = curr->next;
 			}
+			h = curr->h;
+			free(curr);
 			break;
 		}
-
 		prev = curr;
 		curr = curr->next;
 	}
 	LeaveCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 
-	free(curr);
 	return h;
 }
 
@@ -413,7 +409,7 @@ static void _c11threads_win32_thrd_run_tss_dtors(void)
 	size_t i;
 	struct _c11threads_win32_tss_dtor_entry_t *prev;
 	struct _c11threads_win32_tss_dtor_entry_t *curr;
-	struct _c11threads_win32_tss_dtor_entry_t *next;
+	struct _c11threads_win32_tss_dtor_entry_t *temp;
 	void *val;
 
 	EnterCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
@@ -421,8 +417,7 @@ static void _c11threads_win32_thrd_run_tss_dtors(void)
 	for (i = 0; i < TSS_DTOR_ITERATIONS && ran_dtor; ++i) {
 		ran_dtor = 0;
 		prev = NULL;
-		curr = _c11threads_win32_tss_dtor_list_head;
-
+		curr = _c11threads_win32_tss_dtor_list;
 		while (curr) {
 			val = TlsGetValue(curr->key);
 			if (val) {
@@ -430,17 +425,20 @@ static void _c11threads_win32_thrd_run_tss_dtors(void)
 				curr->dtor(val);
 				ran_dtor = 1;
 			} else if (GetLastError() != ERROR_SUCCESS) {
-				next = curr->next;
+				temp = curr->next;
 				free(curr);
+				curr = temp;
 				if (prev) {
-					prev->next = next;
-				} else {
-					_c11threads_win32_tss_dtor_list_head = next;
+					prev->next = curr;
+				} else if (!curr) {
+					/* List empty. */
+					_c11threads_win32_tss_dtor_list = NULL;
+					LeaveCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
+					return;
 				}
-				curr = next;
 				continue;
 			}
-
+			prev = curr;
 			curr = curr->next;
 		}
 	}
@@ -465,6 +463,7 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 	struct _c11threads_win32_thrd_start_thunk_parameters_t *thread_start_params;
 	struct _c11threads_win32_thrd_entry_t *thread_entry;
 	void *h;
+	struct _c11threads_win32_thrd_entry_t **curr;
 
 	thread_start_params = malloc(sizeof(*thread_start_params));
 	if (!thread_start_params) {
@@ -480,6 +479,8 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 		return thrd_nomem;
 	}
 
+	thread_entry->next = NULL;
+
 	EnterCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 	h = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)_c11threads_win32_thrd_start_thunk, thread_start_params, 0, thr);
 	if (!h) {
@@ -490,10 +491,15 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 		free(thread_entry);
 		return error == ERROR_NOT_ENOUGH_MEMORY ? thrd_nomem : thrd_error;
 	}
-	thread_entry->next = _c11threads_win32_thrd_list_head;
+
 	thread_entry->h = h;
 	thread_entry->thrd = *thr;
-	_c11threads_win32_thrd_list_head = thread_entry;
+
+	curr = &_c11threads_win32_thrd_list;
+	while (*curr) {
+		curr = &(*curr)->next;
+	}
+	*curr = thread_entry;
 	LeaveCriticalSection(&_c11threads_win32_thrd_list_critical_section);
 
 	return thrd_success;
@@ -941,6 +947,7 @@ int _c11threads_win32_cnd_timedwait64(cnd_t *cond, mtx_t *mtx, const struct _c11
 
 static int _c11threads_win32_tss_register(tss_t key, tss_dtor_t dtor) {
 	struct _c11threads_win32_tss_dtor_entry_t *tss_dtor_entry;
+	struct _c11threads_win32_tss_dtor_entry_t **curr;
 
 	tss_dtor_entry = malloc(sizeof(*tss_dtor_entry));
 	if (!tss_dtor_entry) {
@@ -949,10 +956,14 @@ static int _c11threads_win32_tss_register(tss_t key, tss_dtor_t dtor) {
 
 	tss_dtor_entry->key = key;
 	tss_dtor_entry->dtor = dtor;
+	tss_dtor_entry->next = NULL;
 
 	EnterCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
-	tss_dtor_entry->next = _c11threads_win32_tss_dtor_list_head;
-	_c11threads_win32_tss_dtor_list_head = tss_dtor_entry;
+	curr = &_c11threads_win32_tss_dtor_list;
+	while (*curr) {
+		curr = &(*curr)->next;
+	}
+	*curr = tss_dtor_entry;
 	LeaveCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
 
 	return 1;
@@ -961,24 +972,20 @@ static int _c11threads_win32_tss_register(tss_t key, tss_dtor_t dtor) {
 static void _c11threads_win32_tss_deregister(tss_t key) {
 	struct _c11threads_win32_tss_dtor_entry_t *prev;
 	struct _c11threads_win32_tss_dtor_entry_t *curr;
-	struct _c11threads_win32_tss_dtor_entry_t *next;
 
 	prev = NULL;
 
 	EnterCriticalSection(&_c11threads_win32_tss_dtor_list_critical_section);
-	curr = _c11threads_win32_tss_dtor_list_head;
-	while (curr)
-	{
+	curr = _c11threads_win32_tss_dtor_list;
+	while (curr) {
 		if (curr->key == key) {
-			next = curr->next;
 			if (prev) {
-				prev->next = next;
+				prev->next = curr->next;
 			} else {
-				_c11threads_win32_tss_dtor_list_head = next;
+				_c11threads_win32_tss_dtor_list = curr->next;
 			}
 			break;
 		}
-
 		prev = curr;
 		curr = curr->next;
 	}
