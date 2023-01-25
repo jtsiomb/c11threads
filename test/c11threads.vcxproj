@@ -116,7 +116,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\c11threads_win32.c" />
-    <ClCompile Include="..\test.c" />
+    <ClCompile Include="test.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\c11threads.h" />

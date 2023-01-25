@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\test.c">
+    <ClCompile Include="test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\c11threads_win32.c">
