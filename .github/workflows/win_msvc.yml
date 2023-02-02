@@ -1,0 +1,32 @@
+name: Win32 (MSVC)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: prepare environment
+      uses: microsoft/setup-msbuild@v1.0.2
+      
+    - name: build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        cd test
+        msbuild -m -p:Configuration=Release .
+
+    - name: test
+      run: |
+        cd Release
+        c11threads.exe
+
+# vi:ts=2 sts=2 sw=2 expandtab:
