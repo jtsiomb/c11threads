@@ -1,0 +1,15 @@
+obj = test.obj c11threads_win32.obj
+bin = test.exe
+
+CC = cl
+LD = link
+CFLAGS = -Zi -I..
+
+$(bin): $(obj)
+	$(LD) -out:$@ $(obj) $(LDFLAGS)
+
+c11threads_win32.obj: ../c11threads_win32.c
+	$(CC) $(CFLAGS) -Fo$@ -c $**
+
+clean:
+	del $(obj) $(bin)
