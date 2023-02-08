@@ -394,8 +394,7 @@ struct _c11threads_win32_timespec64_t {
 #endif
 	long tv_nsec;
 };
-#ifndef _UCRT
-#ifndef _TIMESPEC_DEFINED
+#if !defined(_UCRT) && !defined(_TIMESPEC_DEFINED)
 #ifdef _USE_32BIT_TIME_T
 struct timespec {
 	long tv_sec;
@@ -407,8 +406,7 @@ struct timespec {
 	long tv_nsec;
 };
 #endif	/* !defined(_USE_32BIT_TIME_T) */
-#endif	/* !defined(_TIMESPEC_DEFINED) */
-#endif	/* !defined(_UCRT) */
+#endif	/* !defined(_UCRT) && !defined(_TIMESPEC_DEFINED) */
 
 /* Thread functions. */
 
