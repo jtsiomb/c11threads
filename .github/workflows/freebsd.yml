@@ -21,8 +21,10 @@ jobs:
           make
 
     - name: test
-      run: |
-        cd test
-        ./test
+      uses: vmactions/freebsd-vm@v0
+      with:
+        run: |
+          cd test
+          ./test
 
 # vi:ts=2 sts=2 sw=2 expandtab:
