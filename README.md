@@ -1,6 +1,7 @@
 Trivial C11 `threads.h` implementation over POSIX threads, and not-so-trivial
 implementation over Win32 threads.
 
+
 Rationale
 ---------
 Even though GCC provides the threading features required by the C11 standard
@@ -14,11 +15,21 @@ sense to use the standard C way of using threads instead of a mishmash of
 various platform-specific APIs. So until the system libc adds support for it,
 we need a stopgap that works exactly as the C standard describes.
 
+
+License
+-------
+Authors:
+  - John Tsiombikas <nuclear@member.fsf.org>: original POSIX threads wrapper
+  - Oliver Old <oliver.old@outlook.com>: win32 implementation
+
+I place this piece of code in the public domain. Feel free to use as you see
+fit. I'd appreciate it if you keep my name at the top of the code somewhere, but
+whatever.
+
+
 How to use
 ----------
-
 ### With POSIX threads
-
 On UNIX systems, or on Windows with a 3rd party pthreads library, c11threads
 is implemented as a thin wrapper of static inline functions over pthreads.
 
@@ -41,16 +52,18 @@ resources for the duration of the process lifetime is not desirable, you can
 call `c11threads_destroy_win32()` to free them manually at any point, when
 you're done with it.
 
-License
+### Test program
+There's a simple test program under `test/`. To build it on UNIX (GNU/Linux,
+FreeBSD, MacOSX, whatever), simply change into the test directory and type
+`make`.
+
+To build the test program on Windows with MSVC using native win32 threads,
+setup the build environment (usually there's a batch file called `vcvars*.bat`,
+run it in a console), and use microsoft nmake to build:
+`nmake -f Makefile.msvc`.
+
+Contact
 -------
-Authors:
-  - John Tsiombikas <nuclear@member.fsf.org>: original POSIX threads wrapper
-  - Oliver Old <oliver.old@outlook.com>: win32 implementation
-
-I place this piece of code in the public domain. Feel free to use as you see
-fit. I'd appreciate it if you keep my name at the top of the code somewhere, but
-whatever.
-
 Main project site: https://github.com/jtsiomb/c11threads
 
 Feel free to send corrections, patches, trendy social pull requests,

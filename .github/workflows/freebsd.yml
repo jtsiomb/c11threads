@@ -1,0 +1,23 @@
+name: FreeBSD
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+
+    runs-on: macos-12
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: build
+      uses: vmactions/freebsd-vm@v0
+      with:
+        run: |
+          cd test
+          make
+
+# vi:ts=2 sts=2 sw=2 expandtab:
