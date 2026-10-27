@@ -616,6 +616,11 @@ thrd_t thrd_current(void)
 	return GetCurrentThreadId();
 }
 
+int thrd_equal(thrd_t a, thrd_t b)
+{
+	return a == b;
+}
+
 static int _c11threads_win32_sleep_common(__int64 file_time_in)
 {
 	void *timer;
