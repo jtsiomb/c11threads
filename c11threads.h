@@ -50,7 +50,10 @@ Main project site: https://github.com/jtsiomb/c11threads
 
 #include <time.h>
 
-#ifndef TIME_UTC
+/* C11: <time.h> defines TIME_UTC together with timespec_get() */
+#ifdef TIME_UTC
+#define C11THREADS_LIBC_HAS_TIMESPEC_GET
+#else
 #define TIME_UTC 1
 #endif
 
@@ -97,7 +100,7 @@ enum {
 #ifndef __MAC_10_15
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
-#elif __STDC_VERSION__ < 201112L
+#elif __STDC_VERSION__ < 201112L && !defined(C11THREADS_LIBC_HAS_TIMESPEC_GET)
 #define C11THREADS_NO_TIMESPEC_GET
 #endif
 
